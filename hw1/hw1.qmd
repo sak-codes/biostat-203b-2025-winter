@@ -100,7 +100,6 @@ Display the number of lines in each data file using a similar loop. (Hint: combi
 
 **Solution**:
 ```{bash}
-#| eval: false
 for datafile in ~/mimic/hosp/{a,l,pa}*.gz
 do
   echo "Number of lines in" $datafile "is"
@@ -112,6 +111,7 @@ done
 # displaying first few lines of the file
 zcat < ~/mimic/hosp/admissions.csv.gz | head 
 ```
+
 ```{bash}
 # Number of rows in the datafile excluding headers
 zcat < ~/mimic/hosp/admissions.csv.gz  | tail -n +2 | wc -l
@@ -123,10 +123,12 @@ zcat < ~/mimic/hosp/admissions.csv.gz  | tail -n +2 | wc -l
 zcat < ~/mimic/hosp/admissions.csv.gz  | tail -n +2 | awk -F',' '{print $1}' | wc -l
 
 ```
+
 ```{bash}
 # Number of unique patients
 zcat< ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F',' '{print $2}' | sort | uniq | wc -l
 ```
+
 ```{bash}
 # Compare unique patients in `admissions.csv.gz` and `patients.csv.gz`
 zcat< ~/mimic/hosp/patients.csv.gz | tail -n +2 | awk -F',' '{print $1}' | sort | uniq | wc -l
@@ -138,13 +140,14 @@ zcat< ~/mimic/hosp/patients.csv.gz | tail -n +2 | awk -F',' '{print $1}' | sort 
 
 ```{bash}
 # Number taken by
-zcat< ~/mimic/hosp/admissions.csv.gz 
- | tail -n +2 | awk -F',' '{print $6}' | sort | uniq -c | sort -nr
+zcat< ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F',' '{print $6}' | sort | uniq -c | sort -nr
 
 ```
 
 
 7. The `icusays.csv.gz` file contains all the ICU stays during the study period. How many ICU stays, identified by `stay_id`, are in this data file? How many unique patients, identified by `subject_id`, are in this data file?
+
+
 
 8. _To compress, or not to compress. That's the question._ Let's focus on the big data file `labevents.csv.gz`. Compare compressed gz file size to the uncompressed file size. Compare the run times of `zcat < ~/mimic/labevents.csv.gz | wc -l` versus `wc -l labevents.csv`. Discuss the trade off between storage and speed for big data files. (Hint: `gzip -dk < FILENAME.gz > ./FILENAME`. Remember to delete the large `labevents.csv` file after the exercise.)
 
