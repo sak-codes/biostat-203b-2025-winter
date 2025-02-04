@@ -50,7 +50,7 @@ ls -l ~/mimic/icu/
 
 ## Q1. `read.csv` (base R) vs `read_csv` (tidyverse) vs `fread` (data.table)
 
-### Solution1.1 Speed, memory, and data types
+### Solution 1.1: Speed, memory, and data types
 
 There are quite a few utilities in R for reading plain text data files. Let us test the speed of reading a moderate sized compressed csv file, `admissions.csv.gz`, by three functions: `read.csv` in base R, `read_csv` in tidyverse, and `fread` in the data.table package.
 
@@ -119,7 +119,7 @@ cat("Data.table fread: ", memory_read_fread, " bytes\n")
 - `read_csv` (tidyverse) is the second most efficient, using **70,022,592 bytes** (~70 MB).
 - `read.csv` (base R) uses the most memory at **200,098,832 bytes** (~200 MB)
 
-### Solution1.2 User-supplied data types
+### Solution 1.2: User-supplied data types
 
 Re-ingest `admissions.csv.gz` by indicating appropriate column data types in `read_csv`. Does the run time change? How much memory does the result tibble use? (Hint: `col_types` argument in `read_csv`.)
 ```{r}
@@ -198,6 +198,7 @@ system.time({
 })
 
 ```
+- It took more than 3 minutes.
 
 ### Solution 2.2 Ingest selected columns of `labevents.csv.gz` by `read_csv`
 
@@ -224,6 +225,11 @@ In later exercises, we will only be interested in the following lab items: creat
 
 Display the first 10 lines of the new file `labevents_filtered.csv.gz`. How many lines are in this new file, excluding the header? How long does it take `read_csv` to ingest `labevents_filtered.csv.gz`?
 
+```{bash, eval=False}
+zcat ~/mimic/hosp/labevents.csv.gz | awk -F, 'BEGIN {OFS=","} $0 ~ /(50912|50971|50983|50902|50882|51221|51301|50931)/ {print $1, $2, $4, $6}' | gzip > labevents_filtered.csv.gz
+
+```
+
 ### Q2.4 Ingest `labevents.csv` by Apache Arrow
 
 <p align="center">
@@ -235,6 +241,11 @@ Our second strategy is to use [Apache Arrow](https://arrow.apache.org/) for larg
 Then use [`arrow::open_dataset`](https://arrow.apache.org/docs/r/reference/open_dataset.html) to ingest `labevents.csv`, select columns, and filter `itemid` as in Q2.3. How long does the ingest+select+filter process take? Display the number of rows and the first 10 rows of the result tibble, and make sure they match those in Q2.3. (Hint: use `dplyr` verbs for selecting columns and filtering rows.)
 
 Write a few sentences to explain what is Apache Arrow. Imagine you want to explain it to a layman in an elevator. 
+
+```{r}
+gunzip <  ~/mimic/hosp/labevents.csv.gz
+
+```
 
 ### Q2.5 Compress `labevents.csv` to Parquet format and ingest/select/filter
 
