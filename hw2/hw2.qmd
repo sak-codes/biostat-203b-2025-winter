@@ -226,7 +226,8 @@ In later exercises, we will only be interested in the following lab items: creat
 Display the first 10 lines of the new file `labevents_filtered.csv.gz`. How many lines are in this new file, excluding the header? How long does it take `read_csv` to ingest `labevents_filtered.csv.gz`?
 
 ```{bash, eval=False}
-zcat ~/mimic/hosp/labevents.csv.gz | awk -F, 'BEGIN {OFS=","} $0 ~ /(50912|50971|50983|50902|50882|51221|51301|50931)/ {print $1, $2, $4, $6}' | gzip > labevents_filtered.csv.gz
+zcat < ~/mimic/hosp/labevents.csv.gz | awk -F, 'BEGIN {OFS=","} $0 ~ /(50912|50971|50983|50902|50882|51221|51301|50931)/ {print $2, $5, $7, $10}' |
+gzip > labevents_filtered.csv.gz
 
 ```
 
