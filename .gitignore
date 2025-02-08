@@ -3,4 +3,10 @@ hw1/pg42671.txt
 hw1/test1.txt
 hw1/test2.txt
 hw1/.DS_Store
+hw2/chartevents_filtered.csv
+hw2/chartevents_filtered.csv.gz
+hw2/labevents_filtered.csv
+hw2/hw2/labevents_filtered.csv.gz
+hw2/labevents_filtered.parque
+hw2/labevents_filtered.parquet
 *.DS_Store
