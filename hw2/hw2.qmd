@@ -16,6 +16,7 @@ format:
 ---
 
 Display machine information for reproducibility:
+
 ```{r}
 sessionInfo()
 ```
@@ -32,6 +33,7 @@ library(tidyverse)
 ```
 
 Display memory information of your computer
+
 ```{r}
 memuse::Sys.meminfo()
 ```
@@ -92,7 +94,6 @@ cat("Base R read.csv: ", memory_read_csv_base, " bytes\n")
 cat("Tidyverse read_csv: ", memory_read_csv_tidyverse, " bytes\n")
 cat("Data.table fread: ", memory_read_fread, " bytes\n")
 ```
-
 1. Fastest Function: 
 - `fread` from the `data.table` package is the fastest, with a runtime of approx **0.286 seconds**.
 
@@ -108,6 +109,7 @@ cat("Data.table fread: ", memory_read_fread, " bytes\n")
 ### Solution 1.2: User-supplied data types
 
 Re-ingest `admissions.csv.gz` by indicating appropriate column data types in `read_csv`. Does the run time change? How much memory does the result tibble use? (Hint: `col_types` argument in `read_csv`.)
+
 ```{r}
 # Measure time and memory usage for read_csv without col_types
 time_read_csv_without_coltypes <- system.time({
@@ -119,7 +121,6 @@ memory_read_csv_without_coltypes <- object_size(data_tidyverse)
 ```
 
 ```{r}
-
 # Specifying column types based on data structure
 col_types <- cols(
   subject_id = col_integer(),
@@ -159,7 +160,7 @@ cat("Runtime without col_types: ", time_read_csv_without_coltypes["elapsed"],
 cat("Memory usage without col_types: ", memory_read_csv_without_coltypes,
     " bytes\n")
 ```
-- Runtime change: Yes, the runtime with the `col_types` specified is **0.568 seconds**, which is a bit slower than the runtime without `col_types` (**0.549 seconds**). This indicates that specifying column types decreases the loading speed by a minor difference.
+- Runtime change: Yes, the runtime with the `col_types` specified is slightly lower than the runtime without `col_types`. This indicates that specifying column types increased the loading speed by a minor difference.
   
 - Memory usage: The memory usage is **63,470,560 bytes** with the `col_types` specified and **70,022,592 bytes** with `read_csv`. The difference in memory usage is huge (**6552032 bytes**), meaning that specifying column types will optimize the memory instead of
 using default types where double takes more memory in case we have integer types.
@@ -189,6 +190,8 @@ system.time({
 ```
 - It took more than 3 minutes.
 
+**Reason for unable to load the data**
+
 ```{bash}
 ls -l ~/mimic/hosp/labevents.csv.gz
 ```
@@ -213,6 +216,8 @@ labevents_data <- read_csv("~/mimic/hosp/labevents.csv.gz",
 head(labevents_data)
 ```
 - It took more than 3 minutes
+
+**Reason for unable to load the data**
 
 ```{bash}
 zcat < ~/mimic/hosp/labevents.csv.gz | wc -l
@@ -310,7 +315,6 @@ system("gunzip -k ./labevents_filtered.csv.gz")
 ```
 
 ```{r}
-#| eval: false
 library(arrow)
 library(dplyr)
 
@@ -341,7 +345,6 @@ print(time_taken_arrow)
 # Display the number of rows and the first 10 rows of the result tibble
 print(nrow(result_tibble))
 print(head(result_tibble, 10))
-
 ```
 
 The process of ingesting, selecting columns, and filtering rows using Apache Arrow took approximately 3.9 seconds in total. This includes:
