@@ -276,6 +276,15 @@ zcat < ~/mimic/hosp/admissions.csv.gz | head
 ### Q3.1 Ingestion
 
 Import `admissions.csv.gz` as a tibble `admissions_tble`.
+```{r}
+# Import icustays.csv.gz as a tibble
+icustays_tble <- read_csv("~/mimic/hosp/admissions.csv.gz") %>%
+  as_tibble()
+
+# Check the first few rows of the tibble
+print(admissions_tble)
+```
+
 
 ### Q3.2 Summary and visualization
 
