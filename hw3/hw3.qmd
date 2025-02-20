@@ -97,11 +97,14 @@ d_icd_diagnoses <- read.csv(gzfile(d_icd_diagnoses_file))
 # Filter patient data for subject_id = 10063848
 subject_id <- 10063848
 # Filter directly using Arrow's dataset API for large data
-lab_events_dataset <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque")
+# Replace 'path_to_file' with the actual path to your Parquet file
+
+lab_events_dataset <- open_dataset(labevents_pq_dir)
 labevents_data <- lab_events_dataset %>% 
-  filter(subject_id == subject_id) %>%
-  collect()  # This brings only the filtered data into memory
+  filter(subject_id == !!subject_id) %>%
+  collect()
 ```
+
 
 ```{r}
 
@@ -110,31 +113,29 @@ admissions_data <- admissions %>% filter(subject_id == !!subject_id)
 transfers_data <- transfers %>% filter(subject_id == !!subject_id)
 procedures_data <- procedures_icd %>% filter(subject_id == !!subject_id)
 diagnoses_data <- diagnoses_icd %>% filter(subject_id == !!subject_id)
-
-procedures_data <- procedures_icd %>% filter(subject_id == subject_id)
-
 ```
-
 
 
 ```{r}
 # Extract necessary information
-patient_info <- paste("Patient", subject_id, ",", patient_data$gender[1], ",", patient_data$anchor_age[1], "years old,", patient_data$ethnicity[1])
+patient_info <- paste("Patient", subject_id, ",", patient_data$gender[1], ",", patient_data$anchor_age[1], "years old,", admissions_data$race[1])
 diagnoses <- diagnoses_data %>%
   left_join(d_icd_diagnoses, by = "icd_code") %>%
   top_n(3, wt = "seq_num") %>%
-  pull(long_title)
+  pull(long_title) 
 
-diagnoses_text <- paste(diagnoses, collapse = "\n")
+diagnoses_text <- paste(head(diagnoses, 3), collapse = "\n")
 
 # Convert intime and outtime to POSIXct format
 transfers_data <- transfers_data %>%
   mutate(intime = as.POSIXct(intime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
          outtime = as.POSIXct(outtime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
-# Prepare data for ADT events (Admission, Discharge, Transfer)
+# Prepare data for ADT events (Admission, Discharge, Transfer) and filter out "unknown" care units
 adt_data <- transfers_data %>%
-  mutate(care_unit_duration = difftime(outtime, intime, units = "hours"))
+  filter(careunit != "UNKNOWN") %>%  # Drop rows where careunit is "unknown"
+  mutate(care_unit_duration = difftime(outtime, intime, units = "hours"),
+         line_width = ifelse(grepl("icu", careunit, ignore.case = TRUE), 3, 2.5))
 
 
 # Prepare lab event data
@@ -144,20 +145,63 @@ lab_data <- labevents_data %>%
   mutate(event = "Lab")
 
 # Prepare procedures data
-procedures_data <- procedures_data %>%
+procedures_data_1 <- procedures_data %>%
   left_join(d_icd_procedures, by = "icd_code") %>%
   mutate(event = case_when(icd_code == "Central venous catheter" ~ "Central venous catheter",
                            icd_code == "Other incision of brain" ~ "Other incision of brain",
                            TRUE ~ "Spinal tap"))
+procedures_data_1 <- procedures_data_1 %>%
+  mutate(chartdate = as.POSIXct(chartdate, format = "%Y-%m-%d"))
 ```
 
 
 ```{r}
-procedures_data <- procedures_data %>%
-  mutate(chartdate = as.POSIXct(chartdate, format = "%Y-%m-%d"))
+ggplot() +
+  # Procedure events
+  geom_point(data = procedures_data_1, 
+             aes(x = chartdate, y = factor("Procedure", levels = c("ADT", "Lab", "Procedure")), shape = long_title), 
+             size = 3, position = position_nudge(y = 0)) +
+  
+  # Lab events
+  geom_point(data = lab_data, 
+             aes(x = charttime, y = factor("Lab", levels = c("ADT", "Lab", "Procedure"))), 
+             shape = '+', size = 4, position = position_nudge(y = 0)) +
 
+  # ADT events
+  geom_segment(data = adt_data, 
+               aes(x = intime, xend = outtime, y = factor("ADT", levels = c("ADT", "Lab", "Procedure")), 
+                   yend = factor("ADT", levels = c("ADT", "Lab", "Procedure")),
+                   color = careunit, linewidth = line_width), 
+               show.legend = c(linewidth = FALSE)) +  # Remove the line_width legend
+  
+  
+  #ggtitle(paste(patient_info, "\n", diagnoses_text)) +
+  ggtitle(patient_info, subtitle = diagnoses_text) +
+
+  # Axis labels
+  xlab("Calendar Time") + 
+  ylab("") +
+
+  # Update legend titles and move legend to the bottom
+  labs(shape = "Procedure") +
+  labs(color = "Care Unit") +
+  
+  guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) +
+guides(
+  shape = guide_legend(nrow = 3),  # Break the shape legend into multiple rows
+  color = guide_legend(nrow = 2)   # Keep the Care Unit legend on one row
+) +
+  theme_minimal() +
+  
+  coord_cartesian(clip = "off") + 
+theme(
+  plot.margin = margin(1, 1, 1, 1),       # Increase plot margin to prevent cropping
+  legend.position = "bottom",
+  legend.box = "vertical",
+  legend.text = element_text(size = 5),
+  legend.title  = element_text(size = 8)
+)
 ```
-
 
 ```{r}
 # Example code to create the ADT history plot for the patient
@@ -171,8 +215,8 @@ ggplot() +
              aes(x = charttime, y = "Lab"), shape = 4, size = 3, position = position_nudge(y = 0.2)) +  # shape=4 for crosses
   
   # Procedures
-  geom_point(data = procedures_data, 
-             aes(x = chartdate, y = "Procedure", shape = event), size = 5, position = position_nudge(y = -0.2)) +
+  geom_point(data = procedures_data_1, 
+             aes(x = chartdate, y = "Procedure", shape = long_title), size = 5, position = position_nudge(y = -0.2)) +
   
   # Care Unit color legend
   scale_color_manual(values = c("Emergency Department" = "red", 
@@ -406,9 +450,56 @@ zcat < ~/mimic/hosp/d_labitems.csv.gz | head
 We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), and glucose (50931). Retrieve a subset of `labevents.csv.gz` that only containing these items for the patients in `icustays_tble`. Further restrict to the last available measurement (by `storetime`) before the ICU stay. The final `labevents_tble` should have one row per ICU stay and columns for each lab measurement.
 
 ![](labevents_tble.png)
+```{r}
+# Load ICU stays and lab events
+icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz") %>% as_tibble()
+labevents_tble <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque/part-0.parquet", format = "parquet")
+
+
+```
+```{r}
+list.files("~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque", pattern = "*.parquet", full.names = TRUE)
+
+```
 
 
 Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `labevents_pq` folder available at the current working directory `hw3`, for example, by a symbolic link.
+```{r}
+
+
+# Lab items of interest
+lab_items <- c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931)
+
+# Filter relevant lab measurements and join with ICU stays
+labevents_tble_filtered <- labevents_tble %>%
+  filter(itemid %in% lab_items) %>%
+  group_by(subject_id, hadm_id, itemid) %>%
+  filter(storetime == max(storetime)) %>%
+  pivot_wider(names_from = itemid, values_from = valuenum) %>%
+  rename(
+    bicarbonate = `50882`,
+    chloride = `50902`,
+    creatinine = `50912`,
+    glucose = `50931`,
+    potassium = `50971`,
+    sodium = `50983`,
+    hematocrit = `51221`,
+    wbc = `51301`
+  ) %>%
+  select(subject_id, hadm_id, bicarbonate, chloride, creatinine, glucose, potassium, sodium, hematocrit, wbc)
+
+# Join with ICU stays to include stay_id
+labevents_tble_final <- icustays_tble %>%
+  select(subject_id, hadm_id, stay_id) %>%
+  inner_join(labevents_tble_filtered, by = c("subject_id", "hadm_id"))
+
+# Preview the final lab events table
+print(labevents_tble_final)
+s
+
+
+
+```
 
 ## Q6. Vitals from charted events
 
@@ -448,16 +539,14 @@ Summarize the following information about the ICU stay cohort `mimic_icu_cohort`
 
 - Length of ICU stay `los` vs demographic variables (race, insurance, marital_status, gender, age at intime)
 ```{r}
-icu_cohort |>
-  groupby(subject_id)|>
-  summarise(
-    n=n(),
-    race=first(race)
-     ) |>
-  ggplot() +
-  geom_boxplot(mapping =aes(x=race,y=n))+
-  #flip coordinates
-  coord_flip
+# Example for summarizing length of stay by demographic variables
+mimic_icu_cohort %>%
+  group_by(gender, race, insurance, marital_status) %>%
+  summarize(
+    mean_los = mean(los, na.rm = TRUE),
+    median_los = median(los, na.rm = TRUE)
+  )
+
   
 ```
 
