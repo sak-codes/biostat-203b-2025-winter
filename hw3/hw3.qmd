@@ -65,6 +65,13 @@ arrow::write_dataset(
 )
 ```
 
+```{r}
+arrow::write_dataset(
+  open_dataset("~/mimic/icu/chartevents.csv.gz", format = "csv"),
+  path = "./chartevents_pq.parque",
+  format = "parquet"
+)
+```
 
 ```{r}
 # File paths to the data files
@@ -89,6 +96,7 @@ procedures_icd <- read.csv(gzfile(procedures_icd_file))
 diagnoses_icd <- read.csv(gzfile(diagnoses_icd_file))
 d_icd_procedures <- read.csv(gzfile(d_icd_procedures_file))
 d_icd_diagnoses <- read.csv(gzfile(d_icd_diagnoses_file))
+
 
 ```
 
@@ -210,9 +218,91 @@ ICU stays are a subset of ADT history. This figure shows the vitals of the patie
 ![](10001217_icu.png)
 
 Do a similar visualization for the patient `10063848`.
+```{r}
+arrow::write_dataset(
+  open_dataset("~/mimic/icu/procedureevents.csv.gz", format = "csv"),
+  path = "./procedureevents_pq.parque",
+  format = "parquet"
+)
+```
+
+```{r}
+chartevents_pq_dir<- "~/repos/biostat-203b-2025-winter/hw3/chartevents_pq.parque"
+```
 
 
 
+```{r}
+subject_id <- 10063848
+```
+
+```{r}
+chartevents_dataset <- open_dataset(chartevents_pq_dir)
+chartevents_data <- chartevents_dataset %>% 
+  filter(subject_id == !!subject_id) %>%
+  collect()
+```
+
+```{r}
+chartevents_data <- chartevents_data %>%
+  mutate(bp_type = case_when(
+    valueuom == "mmHg" & itemid == 220179 ~ "Systolic BP",
+    valueuom == "mmHg" & itemid == 220180 ~ "Diastolic BP",
+    TRUE ~ NA_character_
+  ))
+
+```
+
+```{r}
+library(ggplot2)
+
+# Filter data to include the relevant vitals
+vital_data <- chartevents_data %>%
+  filter(itemid %in% c(220045, 220180, 220179, 223761, 220210)) %>%
+  mutate(vital_type = case_when(
+    itemid == 220045 ~ "HR",
+    itemid == 220180 ~ "NBPd",
+    itemid == 220179 ~ "NBPs",
+    itemid == 220210 ~ "RR",
+    itemid == 223761 ~ "Temparature Farhenheit",
+    TRUE ~ NA_character_
+  ))
+
+# Create a line plot for the vitals
+ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
+  geom_line() +
+  geom_point()+
+  
+  # Facet by vital type and stay_id
+  facet_grid(vital_type ~ stay_id, scales = "free_y") +
+  scale_x_datetime(
+    date_breaks="1 day",
+    
+    date_labels = "%b %d %H:%M",  # Format the x-axis labels to show month, day, time
+           # Breaks at every day to ensure readability
+  ) +
+  labs(
+    title = paste("Patient",subject_id,"ICU stays - Vitals"),
+    x= NULL,
+    y= NULL,
+    color ="Vital"
+  )+
+ 
+  
+  
+  # Set a theme for clarity
+  theme_minimal() +
+  
+ 
+  
+  # Adjust legend position
+theme(
+  
+    legend.position = "bottom"  ,
+    strip.text = element_text(size =10) # Place legend at the bottom+
+  ) 
+
+```
 
 
 ## Q2. ICU stays
