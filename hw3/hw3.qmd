@@ -203,48 +203,6 @@ theme(
 )
 ```
 
-```{r}
-# Example code to create the ADT history plot for the patient
-ggplot() +
-  # ADT events
-  geom_segment(data = adt_data, 
-               aes(x = intime, xend = outtime, y = "ADT", yend = "ADT", color = careunit, linewidth = care_unit_duration)) +
-  
-  # Lab events
-  geom_point(data = lab_data, 
-             aes(x = charttime, y = "Lab"), shape = 4, size = 3, position = position_nudge(y = 0.2)) +  # shape=4 for crosses
-  
-  # Procedures
-  geom_point(data = procedures_data_1, 
-             aes(x = chartdate, y = "Procedure", shape = long_title), size = 5, position = position_nudge(y = -0.2)) +
-  
-  # Care Unit color legend
-  scale_color_manual(values = c("Emergency Department" = "red", 
-                                "Medicine" = "green", 
-                                "Neurology" = "cyan", 
-                                "Surgical Intensive Care Unit (SICU)" = "purple")) +
-  
-  # Line size for care unit duration (continuous scale)
-  scale_linewidth_continuous(range = c(1, 5)) + 
-  
-  # Procedure shape legend
-  scale_shape_manual(values = c("Central venous catheter" = 16, 
-                                "Other incision of brain" = 17, 
-                                "Spinal tap" = 15)) +
-  
-  # Title and formatting
-  ggtitle("Patient 10063848 ADT History") +
-  xlab("Calendar Time") + 
-  ylab("") +
-  theme_minimal()
-
-
-```
-
-
-
-
-
 ### Q1.2 ICU stays
 
 ICU stays are a subset of ADT history. This figure shows the vitals of the patient `10001217` during ICU stays. The x-axis is the calendar time, and the y-axis is the value of the vital. The color of the line represents the type of vital. The facet grid shows the abbreviation of the vital and the stay ID.
