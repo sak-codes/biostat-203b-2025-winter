@@ -113,6 +113,9 @@ labevents_data <- lab_events_dataset %>%
   collect()
 ```
 
+```{r}
+head(labevents_data)
+```
 
 ```{r}
 
@@ -218,6 +221,8 @@ ICU stays are a subset of ADT history. This figure shows the vitals of the patie
 ![](10001217_icu.png)
 
 Do a similar visualization for the patient `10063848`.
+
+### Solution 1.2
 ```{r}
 arrow::write_dataset(
   open_dataset("~/mimic/icu/procedureevents.csv.gz", format = "csv"),
@@ -486,78 +491,120 @@ ggplot(patients_tble, aes(x = anchor_age)) +
 ## Q5. Lab results
 
 `labevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/labevents/>) contains all laboratory measurements for patients. The first 10 lines are
-```{bash}
+```{bash, eval=False}
 zcat < ~/mimic/hosp/labevents.csv.gz | head
 ```
 
 `d_labitems.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/d_labitems/>) is the dictionary of lab measurements. 
-```{bash}
+```{bash, eval=False}
 zcat < ~/mimic/hosp/d_labitems.csv.gz | head
 ```
 
 We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), and glucose (50931). Retrieve a subset of `labevents.csv.gz` that only containing these items for the patients in `icustays_tble`. Further restrict to the last available measurement (by `storetime`) before the ICU stay. The final `labevents_tble` should have one row per ICU stay and columns for each lab measurement.
+Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `labevents_pq` folder available at the current working directory `hw3`, for example, by a symbolic link.
 
 ![](labevents_tble.png)
+### Solution 5
+
 ```{r}
-# Load ICU stays and lab events
-icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz") %>% as_tibble()
-labevents_tble <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque/part-0.parquet", format = "parquet")
-
-
-```
-```{r}
-list.files("~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque", pattern = "*.parquet", full.names = TRUE)
-
+icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz",show_col_types = FALSE) %>%
+  as_tibble()
 ```
 
 
-Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `labevents_pq` folder available at the current working directory `hw3`, for example, by a symbolic link.
 ```{r}
+dlabitems_tble <- read_csv("~/mimic/hosp/d_labitems.csv.gz",show_col_types = FALSE) |>
+  filter(itemid %in% c(
+    50912,
+    50971,
+    50983,
+    50902,
+    50882,
+    51221,
+    51301,
+    50931
+  )) |>
+  mutate(itemid = as.integer(itemid)) 
 
 
-# Lab items of interest
-lab_items <- c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931)
+```
 
-# Filter relevant lab measurements and join with ICU stays
-labevents_tble_filtered <- labevents_tble %>%
-  filter(itemid %in% lab_items) %>%
-  group_by(subject_id, hadm_id, itemid) %>%
-  filter(storetime == max(storetime)) %>%
-  pivot_wider(names_from = itemid, values_from = valuenum) %>%
-  rename(
-    bicarbonate = `50882`,
-    chloride = `50902`,
-    creatinine = `50912`,
-    glucose = `50931`,
-    potassium = `50971`,
-    sodium = `50983`,
-    hematocrit = `51221`,
-    wbc = `51301`
-  ) %>%
-  select(subject_id, hadm_id, bicarbonate, chloride, creatinine, glucose, potassium, sodium, hematocrit, wbc)
-
-# Join with ICU stays to include stay_id
-labevents_tble_final <- icustays_tble %>%
-  select(subject_id, hadm_id, stay_id) %>%
-  inner_join(labevents_tble_filtered, by = c("subject_id", "hadm_id"))
-
-# Preview the final lab events table
-print(labevents_tble_final)
-s
-
-
+```{r}
+library(arrow)
+library(duckdb)
+library(dplyr)
+library(tidyr)
+library(stringr)
+# Open the parquet dataset
+open_dataset(labevents_pq_dir, format = "parquet") |>
+  
+  # Create a virtual table in DuckDB
+  to_duckdb() |>
+  
+  # Select necessary variables
+  select(subject_id, itemid, storetime, valuenum) |>
+  
+  # Filter for itemid of interest
+  filter(itemid %in% dlabitems_tble$itemid) |>
+  
+  # Join with icustays table to get intime
+  left_join(
+    select(icustays_tble, subject_id, stay_id, intime),
+    by = c("subject_id"),
+    copy = TRUE
+  ) |>
+  
+  # Filter to keep only records before ICU intime
+  filter(storetime < intime) |>
+  
+  # Group by subject_id, stay_id, and itemid
+  group_by(subject_id, stay_id, itemid) |>
+  
+  # Keep only the last storetime for each item before intime
+  slice_max(storetime, n = 1) |>
+  
+  # Remove storetime and intime columns, ungroup the data
+  select(-storetime, -intime) |>
+  ungroup() |>
+  
+  # Pivot wider to make itemid names as columns
+  pivot_wider(names_from = itemid, values_from = valuenum) |>
+  
+  # Rename columns based on dlabitems_tble labels
+  rename_at(
+    vars(as.character(dlabitems_tble$itemid)),
+    ~str_to_lower(dlabitems_tble$label)
+  ) |>
+  
+  # Rename specific columns (e.g., white blood cells)
+  rename(wbc = `white blood cells`) |>
+  
+  # Show the query for debugging purposes
+  show_query() |>
+  
+  # Collect the results into an R dataframe
+  collect() |>
+  
+  # Arrange by subject_id and stay_id
+  arrange(subject_id, stay_id)  %>%
+  
+  # Relocate columns, sorting other column names alphabetically
+  relocate(subject_id, stay_id, sort(names(names(.)))) |>
+  
+  # Print the dataframe with full width
+  print(width = Inf)
 
 ```
 
 ## Q6. Vitals from charted events
 
 `chartevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/chartevents/>) contains all the charted data available for a patient. During their ICU stay, the primary repository of a patient’s information is their electronic chart. The `itemid` variable indicates a single measurement type in the database. The `value` variable is the value measured for `itemid`. The first 10 lines of `chartevents.csv.gz` are
-```{bash}
+```{bash, eval= False}
 zcat < ~/mimic/icu/chartevents.csv.gz | head
 ```
 
 `d_items.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
-```{bash}
+```{bash, eval= False}
 zcat < ~/mimic/icu/d_items.csv.gz | head
 ```
 
@@ -566,6 +613,8 @@ We are interested in the vitals for ICU patients: heart rate (220045), systolic 
 ![](chartevents_tble.png)
 
 Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `chartevents_pq` folder available at the current working directory, for example, by a symbolic link.
+
+
 
 ## Q7. Putting things together
 
