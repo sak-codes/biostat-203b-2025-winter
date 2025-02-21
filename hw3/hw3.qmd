@@ -106,7 +106,10 @@ d_icd_diagnoses <- read.csv(gzfile(d_icd_diagnoses_file))
 subject_id <- 10063848
 # Filter directly using Arrow's dataset API for large data
 # Replace 'path_to_file' with the actual path to your Parquet file
+```
 
+
+```{r}
 lab_events_dataset <- open_dataset(labevents_pq_dir)
 labevents_data <- lab_events_dataset %>% 
   filter(subject_id == !!subject_id) %>%
@@ -537,10 +540,14 @@ library(tidyr)
 library(stringr)
 
 # Open the parquet dataset
-open_dataset(labevents_pq_dir, format = "parquet") |>
-  
-  # Create a virtual table in DuckDB
+labevents_tble <- open_dataset(labevents_pq_dir, format = "parquet")
+```
+
+
+```{r}
+labs_data <- labevents_tble |>
   to_duckdb() |>
+
   
   # Select necessary variables
   select(subject_id, itemid, storetime, valuenum) |>
@@ -654,10 +661,10 @@ vitals_data <- chartevents_tble |>
   
   # Group by subject, stay, and itemid
   group_by(subject_id, stay_id, itemid) |>
-  slice_min(storetime, with_ties = TRUE) |>
+  slice_min(storetime, with_ties = FALSE) |>
   
   # Calculate the average value for each itemid during the ICU stay
-  summarise(mean = mean(valuenum, na.rm = TRUE)) |>
+  summarise(mean = average(valuenum, na.rm = TRUE)) |>
   
   # Ungroup
   
@@ -685,7 +692,7 @@ vitals_data <- chartevents_tble |>
   # Print with full width
   print(width = Inf)
 
-# This code will produce a table with one row per ICU stay and average values for each vital measurement.
+
 
 
 ```
@@ -703,6 +710,47 @@ Let us create a tibble `mimic_icu_cohort` for all ICU stays, where rows are all 
 The final `mimic_icu_cohort` should have one row per ICU stay and columns for each variable.
 
 ![](mimic_icu_cohort.png)
+
+### Solution 7
+
+```{r}
+mimic_icu_cohort <- icustays_tble %>%
+  left_join(patients,by = "subject_id")  %>%
+  left_join(admissions
+            , by = c("hadm_id","subject_id")) %>%
+  left_join(vitals_data,by = c("subject_id","stay_id")) %>%
+  left_join(labs_data,by=c("subject_id","stay_id"))%>%
+  mutate(
+    intime_year = year(intime),  # Extract year from ICU admission time
+    age_intime = anchor_age + (intime_year - anchor_year)  # Calculate age at ICU admission
+  ) %>%
+  
+  # Optionally remove the intermediate intime_year column
+  select(-intime_year)
+
+print(mimic_icu_cohort,width=Inf)
+  
+
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Q8. Exploratory data analysis (EDA)
 
