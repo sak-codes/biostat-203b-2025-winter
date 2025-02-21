@@ -535,6 +535,7 @@ library(duckdb)
 library(dplyr)
 library(tidyr)
 library(stringr)
+
 # Open the parquet dataset
 open_dataset(labevents_pq_dir, format = "parquet") |>
   
@@ -614,7 +615,80 @@ We are interested in the vitals for ICU patients: heart rate (220045), systolic 
 
 Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `chartevents_pq` folder available at the current working directory, for example, by a symbolic link.
 
+### Solution 6
+```{r}
 
+# Load necessary tables
+chartevents_tble <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/chartevents_pq.parque", format = "parquet")
+```
+
+```{r}
+
+# List of vital item IDs
+vitals_itemids <- c(
+  220045,  # Heart rate
+  220179,  # Systolic non-invasive blood pressure
+  220180,  # Diastolic non-invasive blood pressure
+  223761,  # Body temperature (Fahrenheit)
+  220210   # Respiratory rate
+)
+
+# Filter `chartevents` for the relevant itemids and join with `icustays_tble`
+vitals_data <- chartevents_tble |>
+  to_duckdb() |>
+  
+  # Select required variables
+  select(subject_id, stay_id, itemid, charttime, value,valuenum,storetime) |>
+  
+  # Filter for vitals itemids of interest
+  filter(itemid %in% vitals_itemids) |>
+  
+  # Join with icustays table to get intime
+  left_join(
+    select(icustays_tble, subject_id, stay_id, intime,outtime),
+    by = c("subject_id", "stay_id"),
+    copy = TRUE
+  ) |>
+  
+  filter(storetime >= intime & storetime <= outtime) |>
+  
+  # Group by subject, stay, and itemid
+  group_by(subject_id, stay_id, itemid) |>
+  slice_min(storetime, with_ties = TRUE) |>
+  
+  # Calculate the average value for each itemid during the ICU stay
+  summarise(mean = mean(valuenum, na.rm = TRUE)) |>
+  
+  # Ungroup
+  
+  ungroup() |>
+  
+  # Pivot to wider format to make itemid names as columns
+  pivot_wider(names_from = itemid, values_from = mean) |>
+  
+  # Rename columns to meaningful names
+  rename(
+    heart_rate = `220045`,
+    non_invasive_bloodpressue_systolic = `220179`,
+    non_invasive_bloodpressure_diastolic = `220180`,
+    temperature_farhenheit = `223761`,
+    respiratory_rate = `220210`
+  ) |>
+  
+  # Collect the results
+  collect() |>
+  relocate(subject_id,stay_id,heart_rate, non_invasive_bloodpressure_diastolic,non_invasive_bloodpressue_systolic,respiratory_rate,temperature_farhenheit)|>
+  
+  # Arrange by subject_id and stay_id
+  arrange(subject_id, stay_id) |>
+  
+  # Print with full width
+  print(width = Inf)
+
+# This code will produce a table with one row per ICU stay and average values for each vital measurement.
+
+
+```
 
 ## Q7. Putting things together
 
