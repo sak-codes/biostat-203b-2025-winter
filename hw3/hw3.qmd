@@ -658,13 +658,14 @@ vitals_data <- chartevents_tble |>
   ) |>
   
   filter(storetime >= intime & storetime <= outtime) |>
+  filter(!is.na(valuenum)) |>
   
   # Group by subject, stay, and itemid
   group_by(subject_id, stay_id, itemid) |>
-  slice_min(storetime, with_ties = FALSE) |>
+  slice_min(storetime, with_ties = TRUE) |>
   
   # Calculate the average value for each itemid during the ICU stay
-  summarise(mean = average(valuenum, na.rm = TRUE)) |>
+  summarise(mean = mean(valuenum, na.rm = TRUE)) |>
   
   # Ungroup
   
@@ -681,10 +682,20 @@ vitals_data <- chartevents_tble |>
     temperature_farhenheit = `223761`,
     respiratory_rate = `220210`
   ) |>
+  mutate(
+    heart_rate = round(heart_rate, 1),
+    non_invasive_bloodpressue_systolic = 
+      round(non_invasive_bloodpressue_systolic, 1),
+    non_invasive_bloodpressure_diastolic = 
+      round(non_invasive_bloodpressure_diastolic, 1),
+    temperature_farhenheit = round(temperature_farhenheit, 1),
+    respiratory_rate = round(respiratory_rate, 1)
+  ) |>
   
   # Collect the results
   collect() |>
-  relocate(subject_id,stay_id,heart_rate, non_invasive_bloodpressure_diastolic,non_invasive_bloodpressue_systolic,respiratory_rate,temperature_farhenheit)|>
+  relocate(subject_id,stay_id,heart_rate,non_invasive_bloodpressure_diastolic,
+  non_invasive_bloodpressue_systolic, respiratory_rate,temperature_farhenheit)|>
   
   # Arrange by subject_id and stay_id
   arrange(subject_id, stay_id) |>
@@ -734,45 +745,161 @@ print(mimic_icu_cohort,width=Inf)
   
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Q8. Exploratory data analysis (EDA)
 
 Summarize the following information about the ICU stay cohort `mimic_icu_cohort` using appropriate numerics or graphs:
 
 - Length of ICU stay `los` vs demographic variables (race, insurance, marital_status, gender, age at intime)
 ```{r}
-# Example for summarizing length of stay by demographic variables
-mimic_icu_cohort %>%
-  group_by(gender, race, insurance, marital_status) %>%
-  summarize(
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Create summary statistics for the ICU cohort
+summary_stats <- mimic_icu_cohort %>%
+  group_by(race, insurance, marital_status, gender) %>%
+  summarise(
     mean_los = mean(los, na.rm = TRUE),
-    median_los = median(los, na.rm = TRUE)
+    median_los = median(los, na.rm = TRUE),
+    sd_los = sd(los, na.rm = TRUE),
+    IQR_los = IQR(los, na.rm = TRUE),
+    .groups = 'drop'
   )
+
+# Print summary statistics
+print(summary_stats)
+
+# Plot 1: Boxplot of los vs race
+ggplot(mimic_icu_cohort, aes(x = race, y = los)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Length of ICU Stay (LOS) by Race", x = "Race", y = "LOS (days)")
+
+# Plot 2: Boxplot of los vs insurance
+ggplot(mimic_icu_cohort, aes(x = insurance, y = los)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Length of ICU Stay (LOS) by Insurance", x = "Insurance", y = "LOS (days)")
+
+# Plot 3: Boxplot of los vs marital status
+ggplot(mimic_icu_cohort, aes(x = marital_status, y = los)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Length of ICU Stay (LOS) by Marital Status", x = "Marital Status", y = "LOS (days)")
+
+# Plot 4: Boxplot of los vs gender
+ggplot(mimic_icu_cohort, aes(x = gender, y = los)) +
+  geom_boxplot() +
+  labs(title = "Length of ICU Stay (LOS) by Gender", x = "Gender", y = "LOS (days)")
+
+# Plot 5: Scatter plot of los vs age at intime (age_intime)
+ggplot(mimic_icu_cohort, aes(x = age_intime, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Length of ICU Stay (LOS) by Age at Admission", x = "Age at Admission (years)", y = "LOS (days)")
+
+# Plot 6: Violin plot of los vs gender
+ggplot(mimic_icu_cohort, aes(x = gender, y = los)) +
+  geom_violin() +
+  labs(title = "Distribution of ICU Stay (LOS) by Gender", x = "Gender", y = "LOS (days)")
 
   
 ```
 
 
 - Length of ICU stay `los` vs the last available lab measurements before ICU stay
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Binning lab measurements for box plot representation
+mimic_icu_cohort <- mimic_icu_cohort %>%
+  mutate(glucose_bin = cut(glucose, breaks = 5),
+         sodium_bin = cut(sodium, breaks = 5),
+         potassium_bin = cut(potassium, breaks = 5),
+         wbc_bin = cut(wbc, breaks = 5),
+         creatinine_bin = cut(creatinine, breaks = 5))
+
+# Plot 1: Boxplot of LOS vs Glucose bins
+ggplot(mimic_icu_cohort, aes(x = glucose_bin, y = los)) +
+  geom_boxplot() +
+  labs(title = "LOS vs Glucose", x = "Glucose Bins (mg/dL)", y = "Length of ICU Stay (days)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot 2: Boxplot of LOS vs Sodium bins
+ggplot(mimic_icu_cohort, aes(x = sodium_bin, y = los)) +
+  geom_boxplot() +
+  labs(title = "LOS vs Sodium", x = "Sodium Bins (mEq/L)", y = "Length of ICU Stay (days)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot 3: Boxplot of LOS vs Potassium bins
+ggplot(mimic_icu_cohort, aes(x = potassium_bin, y = los)) +
+  geom_boxplot() +
+  labs(title = "LOS vs Potassium", x = "Potassium Bins (mEq/L)", y = "Length of ICU Stay (days)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot 4: Boxplot of LOS vs WBC bins
+ggplot(mimic_icu_cohort, aes(x = wbc_bin, y = los)) +
+  geom_boxplot() +
+  labs(title = "LOS vs WBC", x = "WBC Bins (K/uL)", y = "Length of ICU Stay (days)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot 5: Boxplot of LOS vs Creatinine bins
+ggplot(mimic_icu_cohort, aes(x = creatinine_bin, y = los)) +
+  geom_boxplot() +
+  labs(title = "LOS vs Creatinine", x = "Creatinine Bins (mg/dL)", y = "Length of ICU Stay (days)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+
 
 - Length of ICU stay `los` vs the first vital measurements within the ICU stay
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Plot 1: Scatter plot of LOS vs Heart Rate
+ggplot(mimic_icu_cohort, aes(x = heart_rate, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "LOS vs Heart Rate", x = "Heart Rate (bpm)", y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+# Plot 2: Scatter plot of LOS vs Systolic Blood Pressure
+ggplot(mimic_icu_cohort, aes(x = non_invasive_bloodpressue_systolic, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "LOS vs Systolic Blood Pressure", x = "Systolic BP (mmHg)", y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+# Plot 3: Scatter plot of LOS vs Diastolic Blood Pressure
+ggplot(mimic_icu_cohort, aes(x = non_invasive_bloodpressure_diastolic, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "LOS vs Diastolic Blood Pressure", x = "Diastolic BP (mmHg)", y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+# Plot 4: Scatter plot of LOS vs Body Temperature
+ggplot(mimic_icu_cohort, aes(x = temperature_farhenheit, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "LOS vs Body Temperature", x = "Body Temperature (°C)", y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+# Plot 5: Scatter plot of LOS vs Respiratory Rate
+ggplot(mimic_icu_cohort, aes(x = respiratory_rate, y = los)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "LOS vs Respiratory Rate", x = "Respiratory Rate (breaths/min)", y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+
+```
+
+
 
 - Length of ICU stay `los` vs first ICU unit
 
