@@ -281,11 +281,10 @@ ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
   geom_line() +
   geom_point()+
   
+  
   # Facet by vital type and stay_id
-  facet_grid(vital_type ~ stay_id, scales = "free_y") +
+  facet_grid(vital_type ~ stay_id, scales = "free") +
   scale_x_datetime(
-    date_breaks="1 day",
-    
     date_labels = "%b %d %H:%M",  # Format the x-axis labels to show month, day, time
            # Breaks at every day to ensure readability
   ) +
@@ -305,10 +304,10 @@ ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
   
   # Adjust legend position
 theme(
-  
+  axis.text.x = element_text(angle = 90 , hjust = 0),
     legend.position = "bottom"  ,
     strip.text = element_text(size =10) # Place legend at the bottom+
-  ) 
+  )
 
 ```
 
