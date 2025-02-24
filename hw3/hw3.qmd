@@ -82,7 +82,7 @@ procedures_icd_file <- "~/mimic/hosp/procedures_icd.csv.gz"
 diagnoses_icd_file <- "~/mimic/hosp/diagnoses_icd.csv.gz"
 d_icd_procedures_file <- "~/mimic/hosp/d_icd_procedures.csv.gz"
 d_icd_diagnoses_file <- "~/mimic/hosp/d_icd_diagnoses.csv.gz"
-labevents_pq_dir <- "~/repos/biostat-203b-2025-winter/hw3/labevents_pq.parque"
+labevents_pq_dir <- "./labevents_pq.parque"
 ```
 
 
@@ -241,7 +241,7 @@ arrow::write_dataset(
 ```
 
 ```{r}
-chartevents_pq_dir<- "~/repos/biostat-203b-2025-winter/hw3/chartevents_pq.parque"
+chartevents_pq_dir<- "./chartevents_pq.parque"
 ```
 
 
@@ -260,20 +260,23 @@ chartevents_data <- chartevents_dataset %>%
 
 
 ```{r}
-library(ggplot2)
-
 # Filter data to include the relevant vitals
 vital_data <- chartevents_data %>%
   filter(itemid %in% c(220045, 220180, 220179, 223761, 220210)) %>%
-  mutate(vital_type = case_when(
-    itemid == 220045 ~ "HR",
-    itemid == 220180 ~ "NBPd",
-    itemid == 220179 ~ "NBPs",
-    itemid == 220210 ~ "RR",
-    itemid == 223761 ~ "Temparature Farhenheit",
-    TRUE ~ NA_character_
-    ),
+  mutate(
+    
+    # Create a new column to label the vital type based on itemid
+    vital_type = case_when(
+      itemid == 220045 ~ "HR",                 
+      itemid == 220180 ~ "NBPd",    # Non-invasive Blood Pressure (Diastolic)
+      itemid == 220179 ~ "NBPs",     # Non-invasive Blood Pressure (Systolic)
+      itemid == 220210 ~ "RR",        # Respiratory Rate
+      itemid == 223761 ~ "Temperature Fahrenheit", # Temperature
+      TRUE ~ NA_character_
     )
+  )
+
+    
 
 # Create a line plot for the vitals
 ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
@@ -327,7 +330,7 @@ zcat < ~/mimic/icu/icustays.csv.gz | head
 
 ### Q2.1 Ingestion
 
-
+### Solution 2.1
 ```{r}
 # Load necessary libraries
 library(tibble)
@@ -345,7 +348,9 @@ print(head(icustays_tble),10)
 
 ### Q2.2 Summary and visualization
 
-How many unique `subject_id`? Can a `subject_id` have multiple ICU stays? Summarize the number of ICU stays per `subject_id` by graphs. 
+How many unique `subject_id`? Can a `subject_id` have multiple ICU stays? Summarize the number of ICU stays per `subject_id` by graphs.
+
+### Solution 2.2
 ```{r}
 library(plotly)
 ```
@@ -375,6 +380,11 @@ interactive_plot <- ggplotly(p)
 # Display the plot
 interactive_plot
 ```
+- Most subjects have a single ICU stay: The vast majority of subjects (around 50,000) had only one ICU stay. This is the tallest bar on the far left, indicating that most patients only visit the ICU once.
+
+- Gradual decrease for multiple stays: There is a sharp decline in the number of subjects as the ICU stay count increases. Fewer subjects had multiple ICU stays. 
+
+- Very few subjects have more than 10 ICU stays: Beyond 10 ICU stays, the number of subjects drops to almost zero, and the graph flattens out. There are only a few outliers with an ICU stay count greater than 20, indicating that it's extremely rare for patients to be admitted to the ICU more than 10-15 times.
 
 ## Q3. `admissions` data
 
@@ -386,6 +396,8 @@ zcat < ~/mimic/hosp/admissions.csv.gz | head
 ### Q3.1 Ingestion
 
 Import `admissions.csv.gz` as a tibble `admissions_tble`.
+
+### Solution 3.1
 ```{r}
 # Import icustays.csv.gz as a tibble
 admissions_tble <- read_csv("~/mimic/hosp/admissions.csv.gz") %>%
@@ -410,6 +422,10 @@ According to the [MIMIC-IV documentation](https://mimic.mit.edu/docs/iv/about/co
  All dates in the database have been shifted to protect patient confidentiality. Dates will be internally consistent for the same patient, but randomly distributed in the future. Dates of birth which occur in the present time are not true dates of birth. Furthermore, dates of birth which occur before the year 1900 occur if the patient is older than 89. In these cases, the patient’s age at their first admission has been fixed to 300.
 
 Admissions per patient
+
+### Solution 3.2
+
+#### Number of admissions per patient  
 ```{r}
 library(plotly)
 
@@ -435,7 +451,7 @@ ggplotly(p1)
 The "Number of Admissions per Patient" histogram demonstrates a highly skewed distribution, with a significant majority of patients experiencing only a single admission.  Visually, the first bar on the histogram is dramatically taller than all subsequent bars, indicating a disproportionately high count of single admissions. This indicates that most hospital visits are likely for acute conditions or short-term procedures.  The rapid decline in patient counts with increasing admissions points to a smaller cohort requiring multiple hospitalizations.
 
 
-Admission hour
+#### number of Admission hour
 ```{r}
 # Extract admission hour
 admissions_hour <- admissions_tble %>%
@@ -457,9 +473,10 @@ p2 <- ggplot(admissions_hour, aes(x = admission_hour, y = count)) +
 ggplotly(p2)
 
 ```
-The "Admission Hour Distribution" graph reveals a notable peak in admissions at midnight, suggesting administrative or system-related influences. The midnight peak is the highest point on the graph, significantly exceeding the values observed in other hours. A decrease in admissions is observed during early morning hours, followed by increases during mid-morning and afternoon, reflecting scheduled procedures and emergency department activity.  A plateau in the evening indicates sustained hospital activity, with a subsequent decline late at night.
+The "Admission Hour Distribution" graph reveals a notable peak in admissions at midnight, suggesting administrative or system-related influences. The midnight peak is the highest point on the graph, significantly exceeding the values observed in other hours.The spike at hour 0 is unusually high and might not represent actual patient admissions but more of a data recording anomaly. It’s common for large spikes at midnight due to default values in databases or rounding practices in electronic health records (EHRs). A decrease in admissions is observed during early morning hours, followed by increases during mid-morning and afternoon, reflecting scheduled procedures and emergency department activity.  A plateau in the evening indicates sustained hospital activity, with a subsequent decline late at night.
 
-admission minute
+#### Admission Minute 
+
 ```{r}
 # Extract admission minute
 admissions_minute <- admissions_tble %>%
@@ -481,9 +498,9 @@ p3 <- ggplot(admissions_minute, aes(x = admission_minute, y = count)) +
 ggplotly(p3)
 
 ```
-The "Admission Minute Distribution" graph displays peculiar peaks at specific minutes (approximately 0, 15, 30, and 45). These peaks are significantly higher than the baseline values, indicating a concentration of recorded admissions at these specific minutes. These peaks are likely artifacts of data recording practices, such as rounding or default values in the electronic health record system, rather than actual variations in admission frequency. This raises concerns about the accuracy of minute-level data.
+The "Admission Minute Distribution" graph displays peculiar peaks at specific minutes (approximately 0, 15, 30, and 45). These peaks are significantly higher than the baseline values, indicating a concentration of recorded admissions at these specific minutes. These peaks are likely artifacts of data recording practices, such as rounding or default values in the electronic health record system, rather than actual variations in admission frequency. 
 
-length of hospital stay
+#### Length of hospital stay
 ```{r}
 # Required libraries
 
@@ -529,6 +546,7 @@ zcat < ~/mimic/hosp/patients.csv.gz | head
 
 Import `patients.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/patients/>) as a tibble `patients_tble`.
 
+### Solution 4.1
 ```{r}
 # Import patients.csv.gz as a tibble
 patients_tble <- read_csv("~/mimic/hosp/patients.csv.gz") %>%
@@ -542,6 +560,7 @@ print(patients_tble)
 
 Summarize variables `gender` and `anchor_age` by graphics, and explain any patterns you see.
 
+### Solution 4.2
 ```{r}
 # Load necessary libraries
 library(ggplot2)
@@ -593,13 +612,15 @@ Hint: Use the Parquet format you generated in Homework 2. For reproducibility, m
 ### Solution 5
 
 ```{r}
-icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz",show_col_types = FALSE) %>%
+icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz",
+                          show_col_types = FALSE) %>%
   as_tibble()
 ```
 
 
 ```{r}
-dlabitems_tble <- read_csv("~/mimic/hosp/d_labitems.csv.gz",show_col_types = FALSE) |>
+dlabitems_tble <- read_csv("~/mimic/hosp/d_labitems.csv.gz",
+                           show_col_types = FALSE) |>
   filter(itemid %in% c(
     50912,
     50971,
@@ -708,7 +729,7 @@ Hint: Use the Parquet format you generated in Homework 2. For reproducibility, m
 ### Solution 6
 ```{r}
 # Load necessary tables
-chartevents_tble <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/chartevents_pq.parque", format = "parquet")
+chartevents_tble <- open_dataset("./chartevents_pq.parque", format = "parquet")
 ```
 
 ```{r}
@@ -814,7 +835,7 @@ mimic_icu_cohort <- icustays_tble %>%
   left_join(labs_data,by=c("subject_id","stay_id"))%>%
   mutate(
     intime_year = year(intime),  # Extract year from ICU admission time
-    age_intime = anchor_age + (intime_year - anchor_year)  # Calculate age at ICU admission
+    age_intime = anchor_age + (intime_year - anchor_year) 
   ) %>%
   
   # Optionally remove the intermediate intime_year column
@@ -830,6 +851,7 @@ print(mimic_icu_cohort,width=Inf)
 
 Summarize the following information about the ICU stay cohort `mimic_icu_cohort` using appropriate numerics or graphs:
 
+### Solution 8.1
 - Length of ICU stay `los` vs demographic variables (race, insurance, marital_status, gender, age at intime)
 ```{r}
 # Load necessary libraries
@@ -885,7 +907,7 @@ ggplot(mimic_icu_cohort, aes(x = age_intime, y = los)) +
 
   
 ```
-
+### Solution 8.2
 
 - Length of ICU stay `los` vs the last available lab measurements before ICU stay
 ```{r}
@@ -944,7 +966,7 @@ ggplot(mimic_icu_cohort, aes(x = creatinine_bin, y = los)) +
 
 ```
 
-
+### Solution 8.3
 
 - Length of ICU stay `los` vs the first vital measurements within the ICU stay
 ```{r}
@@ -996,7 +1018,7 @@ ggplot(mimic_icu_cohort, aes(x = respiratory_rate, y = los)) +
 
 ```
 
-
+### Solution 8.4
 
 - Length of ICU stay `los` vs first ICU unit
 ```{r}
