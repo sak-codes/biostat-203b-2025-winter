@@ -11,4 +11,13 @@ hw2/labevents_filtered.parque
 hw2/labevents_filtered.parquet
 hw2/grade_hw2.md
 hw2/hw2.rmarkdown
+hw3/procedureevents_pq.parque
+hw3/labevents_pq.parque
+hw3/chartevents_pq.parque
+hw3/grade_hw3.md
+hw3/labevents.csv
+hw3/labevents*
+hw3/chartevents*
+hw3/*.rds
+
 *.DS_Store
