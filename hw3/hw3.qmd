@@ -50,8 +50,8 @@ Do a similar visualization for the patient with `subject_id` 10063848 using ggpl
 Hint: We need to pull information from data files `patients.csv.gz`, `admissions.csv.gz`, `transfers.csv.gz`, `labevents.csv.gz`, `procedures_icd.csv.gz`, `diagnoses_icd.csv.gz`, `d_icd_procedures.csv.gz`, and `d_icd_diagnoses.csv.gz`. For the big file `labevents.csv.gz`, use the Parquet format you generated in Homework 2. For reproducibility, make the Parquet folder `labevents_pq` available at the current working directory `hw3`, for example, by a symbolic link. Make your code reproducible.
 
 ### Solution 1.1
-```{r}
-#| eval: false
+```{r,eval = F}
+
 system("gunzip -k ~/mimic/hosp/labevents.csv.gz")
 ```
 
@@ -104,8 +104,6 @@ d_icd_diagnoses <- read.csv(gzfile(d_icd_diagnoses_file))
 ```{r}
 # Filter patient data for subject_id = 10063848
 subject_id <- 10063848
-# Filter directly using Arrow's dataset API for large data
-# Replace 'path_to_file' with the actual path to your Parquet file
 ```
 
 
@@ -145,11 +143,12 @@ transfers_data <- transfers_data %>%
   mutate(intime = as.POSIXct(intime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
          outtime = as.POSIXct(outtime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
-# Prepare data for ADT events (Admission, Discharge, Transfer) and filter out "unknown" care units
+# Prepare data for ADT events (Admission, Discharge, Transfer)
 adt_data <- transfers_data %>%
   filter(careunit != "UNKNOWN") %>%  # Drop rows where careunit is "unknown"
   mutate(care_unit_duration = difftime(outtime, intime, units = "hours"),
-         line_width = ifelse(grepl("icu", careunit, ignore.case = TRUE), 3, 2.5))
+         line_width = ifelse(grepl("icu", careunit, ignore.case = TRUE),
+                             3, 2.5))
 
 
 # Prepare lab event data
@@ -161,8 +160,9 @@ lab_data <- labevents_data %>%
 # Prepare procedures data
 procedures_data_1 <- procedures_data %>%
   left_join(d_icd_procedures, by = "icd_code") %>%
-  mutate(event = case_when(icd_code == "Central venous catheter" ~ "Central venous catheter",
-                           icd_code == "Other incision of brain" ~ "Other incision of brain",
+  mutate(event =
+  case_when(icd_code == "Central venous catheter" ~ "Central venous catheter",
+  icd_code == "Other incision of brain" ~ "Other incision of brain",
                            TRUE ~ "Spinal tap"))
 procedures_data_1 <- procedures_data_1 %>%
   mutate(chartdate = as.POSIXct(chartdate, format = "%Y-%m-%d"))
@@ -173,20 +173,26 @@ procedures_data_1 <- procedures_data_1 %>%
 ggplot() +
   # Procedure events
   geom_point(data = procedures_data_1, 
-             aes(x = chartdate, y = factor("Procedure", levels = c("ADT", "Lab", "Procedure")), shape = long_title), 
+             aes(x = chartdate,
+                 y = factor("Procedure", 
+                            levels = c("ADT", "Lab", "Procedure")), 
+                 shape = long_title), 
              size = 3, position = position_nudge(y = 0)) +
   
   # Lab events
   geom_point(data = lab_data, 
-             aes(x = charttime, y = factor("Lab", levels = c("ADT", "Lab", "Procedure"))), 
+             aes(x = charttime,
+                 y = factor("Lab",
+                            levels = c("ADT", "Lab", "Procedure"))), 
              shape = '+', size = 4, position = position_nudge(y = 0)) +
 
   # ADT events
   geom_segment(data = adt_data, 
-               aes(x = intime, xend = outtime, y = factor("ADT", levels = c("ADT", "Lab", "Procedure")), 
+               aes(x = intime, xend = outtime, 
+                   y = factor("ADT", levels = c("ADT", "Lab", "Procedure")), 
                    yend = factor("ADT", levels = c("ADT", "Lab", "Procedure")),
                    color = careunit, linewidth = line_width), 
-               show.legend = c(linewidth = FALSE)) +  # Remove the line_width legend
+               show.legend = c(linewidth = FALSE)) + 
   
   
   #ggtitle(paste(patient_info, "\n", diagnoses_text)) +
@@ -196,20 +202,20 @@ ggplot() +
   xlab("Calendar Time") + 
   ylab("") +
 
-  # Update legend titles and move legend to the bottom
+  
   labs(shape = "Procedure") +
   labs(color = "Care Unit") +
   
   guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) +
 guides(
-  shape = guide_legend(nrow = 3),  # Break the shape legend into multiple rows
-  color = guide_legend(nrow = 2)   # Keep the Care Unit legend on one row
+  shape = guide_legend(nrow = 3),  
+  color = guide_legend(nrow = 2)  
 ) +
   theme_minimal() +
   
   coord_cartesian(clip = "off") + 
 theme(
-  plot.margin = margin(1, 1, 1, 1),       # Increase plot margin to prevent cropping
+  plot.margin = margin(1, 1, 1, 1),      
   legend.position = "bottom",
   legend.box = "vertical",
   legend.text = element_text(size = 5),
@@ -251,15 +257,7 @@ chartevents_data <- chartevents_dataset %>%
   collect()
 ```
 
-```{r}
-chartevents_data <- chartevents_data %>%
-  mutate(bp_type = case_when(
-    valueuom == "mmHg" & itemid == 220179 ~ "Systolic BP",
-    valueuom == "mmHg" & itemid == 220180 ~ "Diastolic BP",
-    TRUE ~ NA_character_
-  ))
 
-```
 
 ```{r}
 library(ggplot2)
@@ -274,7 +272,8 @@ vital_data <- chartevents_data %>%
     itemid == 220210 ~ "RR",
     itemid == 223761 ~ "Temparature Farhenheit",
     TRUE ~ NA_character_
-  ))
+    ),
+    )
 
 # Create a line plot for the vitals
 ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
@@ -285,8 +284,13 @@ ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
   # Facet by vital type and stay_id
   facet_grid(vital_type ~ stay_id, scales = "free") +
   scale_x_datetime(
-    date_labels = "%b %d %H:%M",  # Format the x-axis labels to show month, day, time
-           # Breaks at every day to ensure readability
+    labels = function(x) {
+      labels <- format(x, "%b %d %H:%M")
+      labels_alternate <- ifelse(seq_along(labels) %% 2 == 0,
+                                 paste0("\n", labels), 
+                                 labels) 
+      return(labels_alternate)
+    }
   ) +
   labs(
     title = paste("Patient",subject_id,"ICU stays - Vitals"),
@@ -294,19 +298,21 @@ ggplot(vital_data, aes(x = charttime, y = valuenum, color = vital_type)) +
     y= NULL,
     color ="Vital"
   )+
- 
-  
-  
   # Set a theme for clarity
   theme_minimal() +
   
- 
-  
   # Adjust legend position
 theme(
-  axis.text.x = element_text(angle = 90 , hjust = 0),
+ 
+    strip.text.x = element_text(size = 8, face = "bold", color = "white"), 
+    strip.text.y = element_text(size = 8, face = "bold", color = "white"), 
+    strip.background = element_rect(fill = "darkgray", color = "white"),
+    
+  axis.text.x = element_text(angle = 0 , hjust = 1),
+  panel.border = element_rect(color = "lightgray", fill = NA, size = 0.5),  
+     panel.spacing.x = unit(0.75, "cm"),
     legend.position = "bottom"  ,
-    strip.text = element_text(size =10) # Place legend at the bottom+
+    
   )
 
 ```
@@ -315,7 +321,7 @@ theme(
 ## Q2. ICU stays
 
 `icustays.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/icustays/>) contains data about Intensive Care Units (ICU) stays. The first 10 lines are
-```{bash, eval=False}
+```{bash, eval=F}
 zcat < ~/mimic/icu/icustays.csv.gz | head
 ```
 
@@ -341,34 +347,39 @@ print(head(icustays_tble),10)
 
 How many unique `subject_id`? Can a `subject_id` have multiple ICU stays? Summarize the number of ICU stays per `subject_id` by graphs. 
 ```{r}
-# Count unique subject_id
-unique_subjects <- icustays_tble %>%
-  summarise(n_unique_subjects = n_distinct(subject_id))
+library(plotly)
+```
 
-print(unique_subjects)
-
-# Check if a subject can have multiple ICU stays
-icu_stays_per_subject <- icustays_tble %>%
+```{r}
+# Count the number of ICU stays per subject
+icu_stays_summary <- icustays_tble %>%
   group_by(subject_id) %>%
-  summarise(n_stays = n()) %>%
-  arrange(desc(n_stays))
+  summarise(icu_stay_count = n()) %>%
+  arrange(desc(icu_stay_count))
+print(icu_stays_summary)
+```
 
-# Summarize by graph
-ggplot(icu_stays_per_subject, aes(x = n_stays)) +
-  geom_bar() +
+```{r}
+p <- ggplot(icu_stays_summary, aes(x = icu_stay_count)) +
+  geom_bar(fill = "skyblue", color = "black") +
   labs(
     title = "Number of ICU Stays per Subject",
-    x = "ICU Stays per Subject",
-    y = "Frequency"
+    x = "ICU Stay Count",
+    y = "Number of Subjects"
   ) +
   theme_minimal()
 
+# Convert to an interactive plot using plotly
+interactive_plot <- ggplotly(p)
+
+# Display the plot
+interactive_plot
 ```
 
 ## Q3. `admissions` data
 
 Information of the patients admitted into hospital is available in `admissions.csv.gz`. See <https://mimic.mit.edu/docs/iv/modules/hosp/admissions/> for details of each field in this file. The first 10 lines are
-```{bash,eval = False}
+```{bash,eval = F}
 zcat < ~/mimic/hosp/admissions.csv.gz | head
 ```
 
@@ -398,60 +409,119 @@ According to the [MIMIC-IV documentation](https://mimic.mit.edu/docs/iv/about/co
 
  All dates in the database have been shifted to protect patient confidentiality. Dates will be internally consistent for the same patient, but randomly distributed in the future. Dates of birth which occur in the present time are not true dates of birth. Furthermore, dates of birth which occur before the year 1900 occur if the patient is older than 89. In these cases, the patient’s age at their first admission has been fixed to 300.
 
-
+Admissions per patient
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(lubridate)
+library(plotly)
 
 # Number of admissions per patient
 admissions_per_patient <- admissions_tble %>%
   group_by(subject_id) %>%
-  summarise(n_admissions = n())
+  summarise(admission_count = n())
 
-# Plot number of admissions per patient
-ggplot(admissions_per_patient, aes(x = n_admissions)) +
-  geom_bar() +
-  labs(title = "Number of Admissions per Patient", x = "Admissions", y = "Count") +
+# Static ggplot2 plot
+p1 <- ggplot(admissions_per_patient, aes(x = admission_count)) +
+  geom_histogram(binwidth = 2, fill = "skyblue", color = "black") +
+  labs(
+    title = "Number of Admissions per Patient",
+    x = "Number of Admissions",
+    y = "Number of Patients"
+  ) +
   theme_minimal()
 
-# Admission hour
-admissions_tble <- admissions_tble %>%
-  mutate(admission_hour = hour(ymd_hms(admittime)))
-
-# Plot admission hour
-ggplot(admissions_tble, aes(x = admission_hour)) +
-  geom_histogram(binwidth = 1, fill = "skyblue", color = "black") +
-  labs(title = "Distribution of Admission Hours", x = "Hour", y = "Count") +
-  theme_minimal()
-
-# Admission minute
-admissions_tble <- admissions_tble %>%
-  mutate(admission_minute = minute(ymd_hms(admittime)))
-
-# Plot admission minute
-ggplot(admissions_tble, aes(x = admission_minute)) +
-  geom_histogram(binwidth = 1, fill = "lightgreen", color = "black") +
-  labs(title = "Distribution of Admission Minutes", x = "Minute", y = "Count") +
-  theme_minimal()
-
-# Length of hospital stay (in days)
-admissions_tble <- admissions_tble %>%
-  mutate(length_of_stay = as.numeric(difftime(ymd_hms(dischtime), ymd_hms(admittime), units = "days")))
-
-# Plot length of hospital stay
-ggplot(admissions_tble, aes(x = length_of_stay)) +
-  geom_histogram(binwidth = 1, fill = "orange", color = "black") +
-  labs(title = "Length of Hospital Stay (Days)", x = "Days", y = "Count") +
-  theme_minimal()
+# Convert to interactive plot
+ggplotly(p1)
 
 ```
+The "Number of Admissions per Patient" histogram demonstrates a highly skewed distribution, with a significant majority of patients experiencing only a single admission.  Visually, the first bar on the histogram is dramatically taller than all subsequent bars, indicating a disproportionately high count of single admissions. This indicates that most hospital visits are likely for acute conditions or short-term procedures.  The rapid decline in patient counts with increasing admissions points to a smaller cohort requiring multiple hospitalizations.
+
+
+Admission hour
+```{r}
+# Extract admission hour
+admissions_hour <- admissions_tble %>%
+  mutate(admission_hour = hour(admittime)) %>%
+  group_by(admission_hour) %>%
+  summarise(count = n())
+
+# Static ggplot2 plot
+p2 <- ggplot(admissions_hour, aes(x = admission_hour, y = count)) +
+  geom_line(color = "blue", size = 1) +
+  labs(
+    title = "Admission Hour Distribution",
+    x = "Hour of Admission",
+    y = "Number of Admissions"
+  ) +
+  theme_minimal()
+
+# Convert to interactive plot
+ggplotly(p2)
+
+```
+The "Admission Hour Distribution" graph reveals a notable peak in admissions at midnight, suggesting administrative or system-related influences. The midnight peak is the highest point on the graph, significantly exceeding the values observed in other hours. A decrease in admissions is observed during early morning hours, followed by increases during mid-morning and afternoon, reflecting scheduled procedures and emergency department activity.  A plateau in the evening indicates sustained hospital activity, with a subsequent decline late at night.
+
+admission minute
+```{r}
+# Extract admission minute
+admissions_minute <- admissions_tble %>%
+  mutate(admission_minute = minute(admittime)) %>%
+  group_by(admission_minute) %>%
+  summarise(count = n())
+
+# Static ggplot2 plot
+p3 <- ggplot(admissions_minute, aes(x = admission_minute, y = count)) +
+  geom_line(color = "green", size = 1) +
+  labs(
+    title = "Admission Minute Distribution",
+    x = "Minute of Admission",
+    y = "Number of Admissions"
+  ) +
+  theme_minimal()
+
+# Convert to interactive plot
+ggplotly(p3)
+
+```
+The "Admission Minute Distribution" graph displays peculiar peaks at specific minutes (approximately 0, 15, 30, and 45). These peaks are significantly higher than the baseline values, indicating a concentration of recorded admissions at these specific minutes. These peaks are likely artifacts of data recording practices, such as rounding or default values in the electronic health record system, rather than actual variations in admission frequency. This raises concerns about the accuracy of minute-level data.
+
+length of hospital stay
+```{r}
+# Required libraries
+
+
+# Calculate length of stay in days
+admissions_tble <- admissions_tble %>%
+  mutate(
+    length_of_stay = as.numeric(difftime(dischtime, admittime, units = "days"))
+  )
+
+# Plot a histogram for length of stay with x-axis limited to 0-100 days
+plot <- ggplot(admissions_tble, aes(x = length_of_stay)) +
+  geom_histogram(binwidth = 2, fill = "skyblue", color = "black") +
+  xlim(0, 100) +  # Limit x-axis to 0-100 days
+  labs(
+    title = "Distribution of Length of Hospital Stay ",
+    x = "Length of Stay (Days)",
+    y = "Count of Admissions"
+  ) +
+  theme_minimal()
+
+# Convert to interactive plot with plotly
+interactive_plot <- ggplotly(plot)
+
+# Show the plot
+interactive_plot
+
+```
+The "Distribution of Length of Hospital Stay" histogram shows a strongly skewed distribution, with the highest frequency of admissions occurring at very short lengths of stay.  The histogram indicates that the majority of admissions result in brief hospitalizations, while a long tail on the right side of the graph signifies a smaller proportion of patients requiring extended stays exceeding 50 days, likely due to complex medical needs or surgical procedures.
+
+- The high count of single admissions in the "Number of Admissions per Patient" graph directly corresponds to the high frequency of short stays in the "Distribution of Length of Hospital Stay" graph. This suggests that a large portion of single admissions are associated with brief hospitalizations.
+- The significant midnight peak in the "Admission Hour Distribution" graph might contribute to the high number of single admissions and short stays, as these midnight admissions could be related to administrative procedures or short-term observations.
+- The data recording anomalies in the "Admission Minute Distribution" graph raise concerns about the accuracy of time-related analyses, which could potentially affect the interpretation of length of stay and admission frequency data.
 
 
 ## Q4. `patients` data
-
 Patient information is available in `patients.csv.gz`. See <https://mimic.mit.edu/docs/iv/modules/hosp/patients/> for details of each field in this file. The first 10 lines are
-```{bash, eval=False}
+```{bash, eval=F}
 zcat < ~/mimic/hosp/patients.csv.gz | head
 ```
 
@@ -481,24 +551,38 @@ ggplot(patients_tble, aes(x = gender)) +
   geom_bar(fill = "lightblue", color = "black") +
   labs(title = "Distribution of Gender", x = "Gender", y = "Count") +
   theme_minimal()
+```
+The  bar chart shows the distribution of gender. Here, the counts of females (F) and males (M) are displayed. While both genders are well-represented, there are slightly more females than males. 
 
-# Anchor age distribution
-ggplot(patients_tble, aes(x = anchor_age)) +
-  geom_histogram(binwidth = 5, fill = "lightgreen", color = "black") +
+```{r}
+
+library(plotly)
+
+# Create the histogram plot
+p <- ggplot(patients_tble, aes(x = anchor_age)) +
+  geom_histogram(binwidth = 2, fill = "lightgreen", color = "black") +
   labs(title = "Distribution of Anchor Age", x = "Anchor Age", y = "Count") +
   theme_minimal()
 
+# Convert the ggplot to an interactive plotly plot
+ggplotly(p)
+
+
 ```
+- The younger peak could correspond to more frequent hospitalization of adults for acute conditions, accidents, or surgeries.
+- The older peak reflects elderly patients often requiring ICU care for chronic conditions or age-related ailments.
+- The spike at the right indicates the dataset's anonymization strategy for older patients, aggregating all patients above 89 into a single category to ensure privacy.
+The spike at age 89-100 likely results from an anonymization process used in MIMIC. For privacy reasons, patients over a certain age (usually around 89) are assigned an anchor age of 90+. This is done to reduce the risk of identifying older individuals who could be more easily recognized due to their age. Hence, the spike on the right represents a group of patients who are over 89 years old, but whose exact ages have been masked.
 
 ## Q5. Lab results
 
 `labevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/labevents/>) contains all laboratory measurements for patients. The first 10 lines are
-```{bash, eval=False}
+```{bash, eval=F}
 zcat < ~/mimic/hosp/labevents.csv.gz | head
 ```
 
 `d_labitems.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/d_labitems/>) is the dictionary of lab measurements. 
-```{bash, eval=False}
+```{bash, eval=F}
 zcat < ~/mimic/hosp/d_labitems.csv.gz | head
 ```
 
@@ -591,27 +675,27 @@ labs_data <- labevents_tble |>
   
   # Collect the results into an R dataframe
   collect() |>
+  relocate(subject_id,stay_id,bicarbonate,chloride,creatinine,glucose,
+  potassium, sodium,hematocrit, wbc)|>
   
   # Arrange by subject_id and stay_id
   arrange(subject_id, stay_id)  %>%
   
-  # Relocate columns, sorting other column names alphabetically
-  relocate(subject_id, stay_id, sort(names(names(.)))) |>
   
   # Print the dataframe with full width
-  print(width = Inf)
+  print(labs_data,width=Inf)
 
 ```
 
 ## Q6. Vitals from charted events
 
 `chartevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/chartevents/>) contains all the charted data available for a patient. During their ICU stay, the primary repository of a patient’s information is their electronic chart. The `itemid` variable indicates a single measurement type in the database. The `value` variable is the value measured for `itemid`. The first 10 lines of `chartevents.csv.gz` are
-```{bash, eval= False}
+```{bash, eval= F}
 zcat < ~/mimic/icu/chartevents.csv.gz | head
 ```
 
 `d_items.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
-```{bash, eval= False}
+```{bash, eval= F}
 zcat < ~/mimic/icu/d_items.csv.gz | head
 ```
 
@@ -623,13 +707,11 @@ Hint: Use the Parquet format you generated in Homework 2. For reproducibility, m
 
 ### Solution 6
 ```{r}
-
 # Load necessary tables
 chartevents_tble <- open_dataset("~/repos/biostat-203b-2025-winter/hw3/chartevents_pq.parque", format = "parquet")
 ```
 
 ```{r}
-
 # List of vital item IDs
 vitals_itemids <- c(
   220045,  # Heart rate
@@ -772,35 +854,34 @@ print(summary_stats)
 ggplot(mimic_icu_cohort, aes(x = race, y = los)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Length of ICU Stay (LOS) by Race", x = "Race", y = "LOS (days)")
+  labs(title = "Length of ICU Stay (LOS) by Race", x = "Race", 
+       y = "LOS (days)")
 
 # Plot 2: Boxplot of los vs insurance
 ggplot(mimic_icu_cohort, aes(x = insurance, y = los)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Length of ICU Stay (LOS) by Insurance", x = "Insurance", y = "LOS (days)")
+  labs(title = "Length of ICU Stay (LOS) by Insurance", 
+       x = "Insurance", y = "LOS (days)")
 
 # Plot 3: Boxplot of los vs marital status
 ggplot(mimic_icu_cohort, aes(x = marital_status, y = los)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Length of ICU Stay (LOS) by Marital Status", x = "Marital Status", y = "LOS (days)")
+  labs(title = "Length of ICU Stay (LOS) by Marital Status", 
+       x = "Marital Status", y = "LOS (days)")
 
 # Plot 4: Boxplot of los vs gender
 ggplot(mimic_icu_cohort, aes(x = gender, y = los)) +
   geom_boxplot() +
-  labs(title = "Length of ICU Stay (LOS) by Gender", x = "Gender", y = "LOS (days)")
+  labs(title = "Length of ICU Stay (LOS) by Gender", 
+       x = "Gender", y = "LOS (days)")
 
 # Plot 5: Scatter plot of los vs age at intime (age_intime)
 ggplot(mimic_icu_cohort, aes(x = age_intime, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "Length of ICU Stay (LOS) by Age at Admission", x = "Age at Admission (years)", y = "LOS (days)")
-
-# Plot 6: Violin plot of los vs gender
-ggplot(mimic_icu_cohort, aes(x = gender, y = los)) +
-  geom_violin() +
-  labs(title = "Distribution of ICU Stay (LOS) by Gender", x = "Gender", y = "LOS (days)")
+  geom_point(color="lightpink",alpha = 0.5) +
+  labs(title = "Length of ICU Stay (LOS) by Age at Admission",
+       x = "Age at Admission (years)", y = "LOS (days)")
 
   
 ```
@@ -822,32 +903,42 @@ mimic_icu_cohort <- mimic_icu_cohort %>%
 
 # Plot 1: Boxplot of LOS vs Glucose bins
 ggplot(mimic_icu_cohort, aes(x = glucose_bin, y = los)) +
-  geom_boxplot() +
-  labs(title = "LOS vs Glucose", x = "Glucose Bins (mg/dL)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs Glucose", x = "Glucose Bins (mg/dL)",
+       y = "Length of ICU Stay (days)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Plot 2: Boxplot of LOS vs Sodium bins
 ggplot(mimic_icu_cohort, aes(x = sodium_bin, y = los)) +
-  geom_boxplot() +
-  labs(title = "LOS vs Sodium", x = "Sodium Bins (mEq/L)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs Sodium", x = "Sodium Bins (mEq/L)",
+       y = "Length of ICU Stay (days)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Plot 3: Boxplot of LOS vs Potassium bins
 ggplot(mimic_icu_cohort, aes(x = potassium_bin, y = los)) +
-  geom_boxplot() +
-  labs(title = "LOS vs Potassium", x = "Potassium Bins (mEq/L)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs Potassium", x = "Potassium Bins (mEq/L)",
+       y = "Length of ICU Stay (days)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Plot 4: Boxplot of LOS vs WBC bins
 ggplot(mimic_icu_cohort, aes(x = wbc_bin, y = los)) +
-  geom_boxplot() +
-  labs(title = "LOS vs WBC", x = "WBC Bins (K/uL)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs WBC", x = "WBC Bins (K/uL)", 
+       y = "Length of ICU Stay (days)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Plot 5: Boxplot of LOS vs Creatinine bins
 ggplot(mimic_icu_cohort, aes(x = creatinine_bin, y = los)) +
-  geom_boxplot() +
-  labs(title = "LOS vs Creatinine", x = "Creatinine Bins (mg/dL)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs Creatinine", x = "Creatinine Bins (mg/dL)",
+       y = "Length of ICU Stay (days)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
@@ -862,37 +953,44 @@ library(ggplot2)
 
 # Plot 1: Scatter plot of LOS vs Heart Rate
 ggplot(mimic_icu_cohort, aes(x = heart_rate, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "LOS vs Heart Rate", x = "Heart Rate (bpm)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se = FALSE, color = "blue") +
+  labs(title = "LOS vs Heart Rate", x = "Heart Rate (bpm)",
+       y = "Length of ICU Stay (days)") +
   theme_minimal()
 
 # Plot 2: Scatter plot of LOS vs Systolic Blood Pressure
 ggplot(mimic_icu_cohort, aes(x = non_invasive_bloodpressue_systolic, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "LOS vs Systolic Blood Pressure", x = "Systolic BP (mmHg)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se= FALSE, color = "blue") +
+  labs(title = "LOS vs Systolic Blood Pressure", x = "Systolic BP (mmHg)",
+       y = "Length of ICU Stay (days)") +
   theme_minimal()
 
 # Plot 3: Scatter plot of LOS vs Diastolic Blood Pressure
-ggplot(mimic_icu_cohort, aes(x = non_invasive_bloodpressure_diastolic, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "LOS vs Diastolic Blood Pressure", x = "Diastolic BP (mmHg)", y = "Length of ICU Stay (days)") +
+ggplot(mimic_icu_cohort, 
+       aes(x = non_invasive_bloodpressure_diastolic, y = los)) +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se=FALSE, color = "blue") +
+  labs(title = "LOS vs Diastolic Blood Pressure",
+       x = "Diastolic BP (mmHg)",
+       y = "Length of ICU Stay (days)") +
   theme_minimal()
 
 # Plot 4: Scatter plot of LOS vs Body Temperature
 ggplot(mimic_icu_cohort, aes(x = temperature_farhenheit, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "LOS vs Body Temperature", x = "Body Temperature (°C)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se=FALSE, color = "blue") +
+  labs(title = "LOS vs Body Temperature", x = "Body Temperature (°C)",
+       y = "Length of ICU Stay (days)") +
   theme_minimal()
 
 # Plot 5: Scatter plot of LOS vs Respiratory Rate
 ggplot(mimic_icu_cohort, aes(x = respiratory_rate, y = los)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", color = "blue") +
-  labs(title = "LOS vs Respiratory Rate", x = "Respiratory Rate (breaths/min)", y = "Length of ICU Stay (days)") +
+  geom_point(color="lightblue",alpha = 0.6) +
+  geom_smooth(method = "lm",se=FALSE, color = "blue") +
+  labs(title = "LOS vs Respiratory Rate", x = "Respiratory Rate (breaths/min)",
+       y = "Length of ICU Stay (days)") +
   theme_minimal()
 
 
@@ -901,4 +999,14 @@ ggplot(mimic_icu_cohort, aes(x = respiratory_rate, y = los)) +
 
 
 - Length of ICU stay `los` vs first ICU unit
+```{r}
+ggplot(mimic_icu_cohort, aes(x = los, y = first_careunit)) +
+  geom_boxplot(color="black",fill="lightpink",alpha = 0.6) +
+  
+  labs(title = "LOS vs first ICU unit", x = "Respiratory Rate (breaths/min)", 
+       y = "Length of ICU Stay (days)") +
+  theme_minimal()
+
+```
+
 
