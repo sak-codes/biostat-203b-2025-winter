@@ -69,8 +69,9 @@ Connect to the `icustays` table.
 # full ICU stays table
 icustays_tble <- tbl(con_bq, "icustays") |>
   arrange(subject_id, hadm_id, stay_id) |>
+  collect()
   # show_query() |>
-  print(width = Inf)
+  print(icustays_tble,width = Inf)
 ```
 
 ### Q1.3 `admissions` data
@@ -79,8 +80,9 @@ Connect to the `admissions` table.
 ```{r}
 admissions_tble <-tbl(con_bq, "admissions") |>
   arrange(subject_id, hadm_id) |>
+  collect()
   # show_query() |>
-  print(width = Inf) 
+  print(admissions_tble,width = Inf) 
 ```
 
 ### Q1.4 `patients` data
@@ -89,8 +91,9 @@ Connect to the `patients` table.
 ```{r}
 patients_tble  <-tbl(con_bq, "patients") |>
   arrange(subject_id) |>
+  collect()
   # show_query() |>
-  print(width = Inf) 
+  print(patients_tble,width = Inf) 
 ```
 
 ### Q1.5 `labevents` data
@@ -247,14 +250,52 @@ vitals_data <- chartevents_tble %>%
   # Print the result
   print(vitals_data,width = Inf)
 ```
-
 ### Q1.7 Put things together
 
 This step is similar to Q7 of HW3. Using _one_ chain of pipes `|>` to perform following data wrangling steps: (i) start with the `icustays_tble`, (ii) merge in admissions and patients tables, (iii) keep adults only (age at ICU intime >= 18), (iv) merge in the labevents and chartevents tables, (v) `collect` the tibble, (vi) sort `subject_id`, `hadm_id`, `stay_id` and `print(width = Inf)`.
 
 ```{r}
-# # TODO
-# mimic_icu_cohort <- 
+patients_tble_local <- collect(patients_tble)
+admissions_tble_local <- collect(admissions_tble)
+```
+
+
+```{r}
+library(bigrquery)
+
+# Make sure the data is a tibble or data frame
+patients_tble <- as_tibble(patients_tble)
+
+# Upload the local data frame to BigQuery
+bq_table_upload(
+  project = "biostat-203b-2025-winter",
+  dataset = "biostat-203b-2025-winter",
+  table = "patients_tble",  # Name of the BigQuery table to upload to
+  values = patients_tble,   # The local data frame or tibble
+  overwrite = TRUE          # Optional: Overwrite the table if it exists
+)
+
+
+```
+
+
+```{r}
+mimic_icu_cohort <- icustays_tble %>%
+  left_join(patients_tble,by = "subject_id",copy=TRUE)  %>%
+  left_join(admissions_tble, by = c("hadm_id","subject_id"),copy=TRUE) %>%
+  left_join(vitals_data,by = c("subject_id","stay_id"),copy=TRUE) %>%
+  left_join(labs_data,by=c("subject_id","stay_id"),copy=TRUE)%>%
+  mutate(
+    intime_year = year(intime),  # Extract year from ICU admission time
+    age_intime = anchor_age + (intime_year - anchor_year) 
+  ) %>%
+  
+  
+  # Optionally remove the intermediate intime_year column
+  select(-intime_year)
+
+print(mimic_icu_cohort,width=Inf)
+  
 ```
 
 ### Q1.8 Preprocessing
