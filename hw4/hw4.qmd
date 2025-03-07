@@ -174,6 +174,9 @@ Connect to `chartevents` table and retrieve a subset that only contain subjects 
 
 ```{r}
 # Assuming `con_bq` is your connection to BigQuery
+icustays_data <- icustays_tble %>%
+  select(subject_id, stay_id, intime, outtime) %>%
+  collect()
 chartevents_tble <- tbl(con_bq, "chartevents")
 
 # List of vital item IDs
@@ -184,42 +187,30 @@ vitals_itemids <- c(
   223761,  # Body temperature (Fahrenheit)
   220210   # Respiratory rate
 )
-  
 
+```
+```{r}
+# Step 1: Collect the ICU stays data
+icustays_data <- icustays_tble %>%
+  select(subject_id, stay_id, intime, outtime) %>%
+  collect()
 
-# Connect to BigQuery and retrieve the data
-vitals_data <- chartevents_tble %>%
-  
-  
-  # Select necessary columns
+# Step 2: Collect the chartevents data for the relevant item IDs
+vitals_data_raw <- chartevents_tble %>%
   select(subject_id, stay_id, itemid, charttime, value, valuenum, storetime) %>%
-  
-  # Filter for relevant itemids and subjects present in icustays_tble
   filter(itemid %in% vitals_itemids) %>%
-  inner_join(
-    select(icustays_tble, subject_id, stay_id,intime,outtime),
-    by = c("subject_id", "stay_id"),
-    copy = TRUE
-  ) %>%
-  
-  # Filter for valid storetimes within ICU stay
+  collect()
+
+# Step 3: Filter and join the data locally in R (after collecting both datasets)
+vitals_data <- vitals_data_raw %>%
+  inner_join(icustays_data, by = c("subject_id", "stay_id")) %>%
   filter(storetime >= intime & storetime <= outtime) %>%
   filter(!is.na(valuenum)) %>%
-  
-  # Group by subject, stay, and itemid, and select the first chart event (by storetime)
   group_by(subject_id, stay_id, itemid) %>%
   slice_min(storetime, with_ties = TRUE) %>%
-  
-  # Calculate the average value for each itemid at the first storetime
   summarise(mean_value = mean(valuenum, na.rm = TRUE)) %>%
-  
-  # Ungroup
   ungroup() %>%
-  
-  # Pivot the data to get itemids as columns
   pivot_wider(names_from = itemid, values_from = mean_value) %>%
-  
-  # Rename the columns to meaningful names
   rename(
     heart_rate = `220045`,
     non_invasive_bloodpressure_systolic = `220179`,
@@ -227,56 +218,25 @@ vitals_data <- chartevents_tble %>%
     temperature_fahrenheit = `223761`,
     respiratory_rate = `220210`
   ) %>%
-  
-  # Round the values for better readability
   mutate(
     heart_rate = round(heart_rate, 1),
     non_invasive_bloodpressure_systolic = round(non_invasive_bloodpressure_systolic, 1),
     non_invasive_bloodpressure_diastolic = round(non_invasive_bloodpressure_diastolic, 1),
     temperature_fahrenheit = round(temperature_fahrenheit, 1),
     respiratory_rate = round(respiratory_rate, 1)
-  )%>%
-  
-  # Collect the results
-  collect() %>%
-  
-  # Relocate subject_id, stay_id to the front for better readability
+  ) %>%
   relocate(subject_id, stay_id, heart_rate, non_invasive_bloodpressure_diastolic,
            non_invasive_bloodpressure_systolic, respiratory_rate, temperature_fahrenheit) %>%
-  
-  # Arrange by subject_id and stay_id
-  arrange(subject_id, stay_id) 
-  
-  # Print the result
-  print(vitals_data,width = Inf)
+  arrange(subject_id, stay_id)
+
+# Step 4: Print the final result
+print(vitals_data, width = Inf)
+
 ```
+
 ### Q1.7 Put things together
 
 This step is similar to Q7 of HW3. Using _one_ chain of pipes `|>` to perform following data wrangling steps: (i) start with the `icustays_tble`, (ii) merge in admissions and patients tables, (iii) keep adults only (age at ICU intime >= 18), (iv) merge in the labevents and chartevents tables, (v) `collect` the tibble, (vi) sort `subject_id`, `hadm_id`, `stay_id` and `print(width = Inf)`.
-
-```{r}
-patients_tble_local <- collect(patients_tble)
-admissions_tble_local <- collect(admissions_tble)
-```
-
-
-```{r}
-library(bigrquery)
-
-# Make sure the data is a tibble or data frame
-patients_tble <- as_tibble(patients_tble)
-
-# Upload the local data frame to BigQuery
-bq_table_upload(
-  project = "biostat-203b-2025-winter",
-  dataset = "biostat-203b-2025-winter",
-  table = "patients_tble",  # Name of the BigQuery table to upload to
-  values = patients_tble,   # The local data frame or tibble
-  overwrite = TRUE          # Optional: Overwrite the table if it exists
-)
-
-
-```
 
 
 ```{r}
@@ -305,6 +265,83 @@ Perform the following preprocessing steps. (i) Lump infrequent levels into "Othe
 Hint: Below is a numerical summary of my tibble after preprocessing:
 
 <iframe width=95% height="500" src="./mimic_icu_cohort_gtsummary.html"></iframe>
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(forcats)
+library(janitor)
+library(gtsummary)
+
+preprocessed_data <- mimic_icu_cohort %>%
+  
+  # i) Lump infrequent levels into "Other" for specific categorical variables
+   mutate(
+    # Convert to factor and replace NAs with "Other"
+    #race = fct_explicit_na(race, na_level = "Unknown"),
+    #last_careunit = last_careunit %>% as_factor() %>% fct_explicit_na(na_level = "Unknown"),
+    #admission_type = admission_type %>% as_factor() %>% fct_explicit_na(na_level = "Unknown"),
+    #admission_location = admission_location %>% as_factor() %>% fct_explicit_na(na_level = "Unknown"),
+    #discharge_location = discharge_location %>% as_factor() ,
+     discharge_location = discharge_location %>%as_factor() %>%fct_drop(only = ""),
+    
+    # Lump infrequent levels into "Other"
+    first_careunit = fct_lump_n(first_careunit, n = 4, other_level = "Other"),
+    # first_careunit = first_careunit %>% as_factor() %>% fct_lump_n(n = 4, other_level = "Other") %>% fct_explicit_na(na_level = "Unknown"),
+    last_careunit = fct_lump_n(last_careunit, n = 4, other_level = "Other"),
+    admission_type = fct_lump_n(admission_type, n = 4, other_level = "Other"),
+    admission_location = fct_lump_n(admission_location, n = 3, other_level = "Other"),
+    discharge_location = fct_lump_n(discharge_location, n = 4, other_level = "Other"),
+    
+    # ii) Collapse levels of `race` into predefined categories
+    race = fct_collapse(race,
+                        ASIAN = c("ASIAN - ASIAN INDIAN", "PACIFIC ISLANDER",
+                                  "ASIAN - CHINESE", "ASIAN - KOREAN", "ASIAN - SOUTH EAST ASIAN"),
+                        BLACK = c("BLACK/AFRICAN", "BLACK/AFRICAN AMERICAN", 
+                                  "BLACK/CAPE VERDEAN", "BLACK/CARIBBEAN ISLAND"),
+                        HISPANIC = c("HISPANIC OR LATINO", "HISPANIC/LATINO - CENTRAL AMERICAN", 
+                                     "HISPANIC/LATINO - COLUMBIAN", "HISPANIC/LATINO - CUBAN", 
+                                     "HISPANIC/LATINO - DOMINICAN", "HISPANIC/LATINO - GUATEMALAN", 
+                                     "HISPANIC/LATINO - HONDURAN", "HISPANIC/LATINO - MEXICAN", 
+                                     "HISPANIC/LATINO - PUERTO RICAN", "HISPANIC/LATINO - SALVADORAN"),
+                        WHITE = c("WHITE - BRAZILIAN", "WHITE - EASTERN EUROPEAN", 
+                                  "WHITE - OTHER EUROPEAN", "WHITE - RUSSIAN"),
+                        Other = c("AMERICAN INDIAN", "PATIENT DECLINED TO ANSWER", 
+                                  "PORTUGUESE", "SOUTH AMERICAN", "UNABLE TO OBTAIN", "UNKNOWN", 
+                                  "OTHER", "AMERICAN INDIAN/ALASKA NATIVE", "MULTIPLE RACE/ETHNICITY",
+                                  "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"),
+                        #Unknown = c("UNKNOWN", "UNKNOWN RACE")
+    ),
+   # marital_status = fct_explicit_na(marital_status, na_level = "Unknown"),
+  marital_status= marital_status %>% na_if("") ,
+  insurance= insurance %>% na_if(""),
+  language= language %>% na_if(""),
+  
+    
+    # iii) Create a new variable `los_long` based on length of stay (`los`)
+    los_long = los >= 2  # assuming 'los' is already in days
+  ) %>%
+  
+  # -glucose_group, -glucose_bin, -sodium_bin, -potassium_bin, ,-creatinine_bin,-heart_rate_bin,-systolic_bp_bin,-diastolic_bp_bin,
+   #      -body_temp_bin,-resp_rate_bin,-wbc_bin
+  # iv) Remove unnecessary variables
+  select(-subject_id, -stay_id, -hadm_id, -intime, -outtime, -admittime, -dischtime, -deathtime, 
+         -admit_provider_id,-edregtime,-dod,-edouttime,-anchor_year_group,-anchor_age,-anchor_year
+         )
+
+# v) Summarize the data stratified by `los_long` using `tbl_summary`
+summary_table <- tbl_summary(
+  preprocessed_data, 
+  by = "los_long", # Stratify by `los_long`
+  statistic = list(all_categorical() ~ "{n} ({p}%)", all_continuous() ~ "{median} ({p25}),{p75}"),  # Adjust statistics for categorical/continuous variables
+  missing = "ifany"  # Handle missing data
+)
+
+# Print the summarized table
+print(summary_table)
+```
+
+
+
 
 ### Q1.9 Save the final tibble
 
