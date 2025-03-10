@@ -19,5 +19,7 @@ hw3/labevents.csv
 hw3/labevents*
 hw3/chartevents*
 hw3/*.rds
-
+hw4/grade_hw4.md
+hw4/*.json
+hw4/labevents_pq.parque
 *.DS_Store
