@@ -264,7 +264,7 @@ Perform the following preprocessing steps. (i) Lump infrequent levels into "Othe
 
 Hint: Below is a numerical summary of my tibble after preprocessing:
 
-<iframe width=95% height="500" src="./mimic_icu_cohort_gtsummary.html"></iframe>
+<iframe width=95% height="500" src="html_files/mimic_icu_cohort_gtsummary.html"></iframe>
 
 ```{r}
 diagnosis_data <- tbl(con_bq, "diagnoses_icd")
