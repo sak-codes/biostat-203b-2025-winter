@@ -1,6 +1,6 @@
 *Sakshi Oza*
 
-### Overall Grade: 218/250
+### Overall Grade: 233/250
 
 ### Late penalty
 
@@ -14,7 +14,7 @@
 
 -   Is the report clear (whole sentences, typos, grammar)? Do readers have a clear idea what's going on and how results are produced by just reading the report? Take some points off if the solutions are too succinct to grasp, or there are too many typos/grammar. 
 
-### Completeness, correctness and efficiency of solution: 178/200
+### Completeness, correctness and efficiency of solution: 193/200
 
 - Q1 (100/100)
 
@@ -26,9 +26,9 @@ Cohort in Q1.7 should match that in HW3.
 
 Q1.8 summaries should roughly match those given.
   
-- Q2 (78/100)
+- Q2 (93/100)
 	- Tabs should have meaningful labels instead of generic names "Tab 1", "Tab 2" (-2)
-	- There are many patients missing in Tab 2 and the ADT plots are missing a lot of information. Also, the ICU plots are not shown (-20)
+	- There are many patients missing in Tab 2 (-5)
 ### Usage of Git: 10/10
 
 -   Are branches (`main` and `develop`) correctly set up? Is the hw submission put into the `main` branch?
