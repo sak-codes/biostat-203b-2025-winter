@@ -71,15 +71,14 @@ library(future)
 
 
 # Preprocess the data
-mimic_icu_cohort <- mimic_icu_cohort %>%
-  mutate(los_long = ifelse(los > 2, 1, 0)) %>%
+mimic_icu_cohort <- data %>%
+  mutate(los_long = as.factor(ifelse(los > 2, 1, 0))) %>%  # Convert los_long to a factor
   select(-los, -last_careunit) %>%  # Remove los and last_careunit
   drop_na()  # Remove rows with missing values
 
 # Sort the data by subject_id, hadm_id, and stay_id
-mimic_icu_cohort <- mimic_icu_cohort %>%
+mimic_icu_cohort <-data %>%
   arrange(subject_id, hadm_id, stay_id)
-
 
 
 ```
@@ -90,7 +89,7 @@ mimic_icu_cohort <- mimic_icu_cohort %>%
 # Set seed for reproducibility
 set.seed(203)
 
-# Stratified partitioning
+# Stratified partitioning (50% training, 50% test)
 split <- initial_split(mimic_icu_cohort, prop = 0.5, strata = los_long)
 train_data <- training(split)
 test_data <- testing(split)
@@ -99,13 +98,13 @@ test_data <- testing(split)
 3. Train and tune the models using the training set.
 ```{r}
 # Define the recipe for preprocessing
+# Define the recipe for preprocessing
 recipe <- recipe(los_long ~ ., data = train_data) %>%
   step_impute_mean(all_numeric_predictors()) %>%
   step_impute_mode(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors()) %>%
   step_normalize(all_numeric_predictors())
-
 # Define models
 logistic_model <- logistic_reg(penalty = tune(), mixture = tune()) %>%
   set_engine("glmnet")
@@ -146,4 +145,8 @@ final_model <- finalize_workflow(
 
 
 4. Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
+```{r}
+
+```
+
 
