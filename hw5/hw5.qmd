@@ -15,7 +15,8 @@ format:
 
 ## Predicting ICU duration
 
-Using the ICU cohort `mimiciv_icu_cohort.rds` you built in Homework 4, develop at least three machine learning approaches (logistic regression with enet regularization, random forest, boosting, SVM, MLP, etc) plus a model stacking approach for predicting whether a patient's ICU stay will be longer than 2 days. You should use the `los_long` variable as the outcome. You algorithms can use patient demographic information (gender, age at ICU `intime`, marital status, race), ICU admission information (first care unit), the last lab measurements before the ICU stay, and first vital measurements during ICU stay as features. You are welcome to use any feature engineering techniques you think are appropriate; but make sure to not use features that are not available at an ICU stay's `intime`. For instance, `last_careunit` cannot be used in your algorithms. 
+Using the ICU cohort `mimiciv_icu_cohort.rds` you built in Homework 4, develop at least three machine learning approaches (logistic regression with enet regularization, random forest, boosting, SVM, MLP, etc) plus a model stacking approach for predicting whether a patient's ICU stay will be longer than 2 days. You should use the `los_long` variable as the outcome. You algorithms can use patient demographic information (gender, age at ICU `intime`, marital status, race), ICU admission information (first care unit), the last lab measurements before the ICU stay, and first vital measurements during ICU stay as features. You are welcome to use any feature engineering techniques you think are appropriate; but make sure to not use features that are not available at an ICU stay's `intime`. For instance, `last_careunit` cannot be used in your algorithms.
+
 ```{r}
 library(bigrquery)
 library(dbplyr)
@@ -27,20 +28,20 @@ library(tidyverse)
 
 ```{r}
 # path to the service account token
-satoken <- "./biostat-203b-2025-winter-4e58ec6e5579.json"
+#satoken <- "./biostat-203b-2025-winter-4e58ec6e5579.json"
 # BigQuery authentication using service account
-bq_auth(path = satoken)
+#bq_auth(path = satoken)
 ```
 
 ```{r}
 # connect to the BigQuery database `biostat-203b-2025-mimiciv_3_1`
-con_bq <- dbConnect(
-  bigrquery::bigquery(),
-  project = "biostat-203b-2025-winter",
-  dataset = "mimiciv_3_1",
-  billing = "biostat-203b-2025-winter"
-)
-con_bq
+#con_bq <- dbConnect(
+#  bigrquery::bigquery(),
+ # project = "biostat-203b-2025-winter",
+ # dataset = "mimiciv_3_1",
+ # billing = "biostat-203b-2025-winter"
+#)
+#con_bq
 ```
 
 
@@ -71,16 +72,14 @@ library(future)
 
 
 # Preprocess the data
-mimic_icu_cohort <- data %>%
+data <- data %>%
   mutate(los_long = as.factor(ifelse(los > 2, 1, 0))) %>%  # Convert los_long to a factor
   select(-los, -last_careunit) %>%  # Remove los and last_careunit
   drop_na()  # Remove rows with missing values
 
 # Sort the data by subject_id, hadm_id, and stay_id
-mimic_icu_cohort <-data %>%
+data <-data %>%
   arrange(subject_id, hadm_id, stay_id)
-
-
 ```
 
 
@@ -90,63 +89,223 @@ mimic_icu_cohort <-data %>%
 set.seed(203)
 
 # Stratified partitioning (50% training, 50% test)
-split <- initial_split(mimic_icu_cohort, prop = 0.5, strata = los_long)
+split <- initial_split(data, prop = 0.5, strata = los_long)
 train_data <- training(split)
 test_data <- testing(split)
 ```
 
+
+
+
 3. Train and tune the models using the training set.
 ```{r}
-# Define the recipe for preprocessing
-# Define the recipe for preprocessing
-recipe <- recipe(los_long ~ ., data = train_data) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_zv(all_predictors()) %>%
-  step_normalize(all_numeric_predictors())
-# Define models
+logit_recipe <- recipe(
+  los_long ~ race + gender + first_careunit + anchor_age + marital_status+
+    chloride + creatinine + bicarbonate + wbc + potassium + hematocrit +
+    sodium + glucose + respiratory_rate + temperature_fahrenheit +
+    non_invasive_bloodpressure_diastolic + non_invasive_bloodpressure_systolic +
+    heart_rate,
+  data = train_data
+) %>%
+  step_impute_mean(all_numeric_predictors()) %>%  # Impute missing numeric values with mean
+  step_impute_mode(all_nominal_predictors()) %>%  # Impute categorical variables with mode
+  step_novel(all_nominal_predictors()) %>%        # Handle new levels in categorical variables
+  step_dummy(all_nominal_predictors()) %>%        # Convert categorical to dummy variables
+  step_zv(all_predictors()) %>%                   # Remove zero-variance predictors
+  step_normalize(all_numeric_predictors())        # Normalize numeric predictors (standardization)
+print(logit_recipe)
+
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(tidyverse)  # Includes magrittr and other tidyverse packages
+library(tidymodels)  # For modeling and preprocessing
+library(rsample)     # For data splitting
+library(yardstick)   # For model evaluation
+library(vip)         # For variable importance
+library(doParallel)  # For parallel processing
+library(xgboost)     # For XGBoost
+library(ranger)      # For random forest
+library(stacks)      # For model stacking
+library(future)      # For parallel processing
+
+# Define logistic regression model
 logistic_model <- logistic_reg(penalty = tune(), mixture = tune()) %>%
-  set_engine("glmnet")
-
-rf_model <- rand_forest(mtry = tune(), trees = 1000) %>%
-  set_engine("ranger") %>%
+  set_engine("glmnet") %>%
   set_mode("classification")
 
-xgb_model <- boost_tree(tree_depth = tune(), learn_rate = tune()) %>%
-  set_engine("xgboost") %>%
-  set_mode("classification")
+# Create a workflow for logistic regression
+logistic_wf <- workflow() %>%
+  add_recipe(logit_recipe) %>%
+  add_model(logistic_model)
 
-# Create a workflow set
-models <- workflow_set(
-  preproc = list(recipe),
-  models = list(logistic = logistic_model, rf = rf_model, xgb = xgb_model)
-)
-
-# Train models using cross-validation
+# Create cross-validation folds
 set.seed(203)
-folds <- vfold_cv(train_data, v = 5)
+folds <- vfold_cv(train_data, v = 5)  # 5-fold cross-validation
 
-results <- models %>%
-  workflow_map("tune_grid", resamples = folds, grid = 10)
+# Train and tune logistic regression
+logistic_res <- logistic_wf %>%
+  tune_grid(resamples = folds, grid = 10)
 
-# Select the best model based on ROC AUC
-best_results <- results %>%
-  extract_workflow_set_result("recipe_logistic") %>%
+# Select the best logistic regression model
+best_logistic <- logistic_res %>%
   select_best(metric = "roc_auc")
 
-final_model <- finalize_workflow(
-  extract_workflow(results, "recipe_logistic"),
-  best_results
-) %>%
+# Finalize the logistic regression model
+final_logistic_model <- logistic_wf %>%
+  finalize_workflow(best_logistic) %>%
   fit(train_data)
 ```
 
 
-
-4. Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
 ```{r}
+# Load necessary libraries
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+library(yardstick)
+library(vip)
+library(doParallel)
+
+# Define KNN model
+knn_model <- nearest_neighbor(neighbors = tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("classification")
+
+# Create a workflow for KNN
+knn_wf <- workflow() %>%
+  add_recipe(logit_recipe) %>%  # Assuming logit_recipe works for both models
+  add_model(knn_model)
+
+# Create cross-validation folds
+set.seed(203)
+folds <- vfold_cv(train_data, v = 5)  # 5-fold cross-validation
+
+# Train and tune the KNN model
+knn_res <- knn_wf %>%
+  tune_grid(resamples = folds, grid = 10)
+
+# Select the best KNN model
+best_knn <- knn_res %>%
+  select_best(metric = "roc_auc")
+
+# Finalize the KNN model
+final_knn_model <- knn_wf %>%
+  finalize_workflow(best_knn) %>%
+  fit(train_data)
 
 ```
 
+```{r}
+# Define XGBoost model
+xgb_model <- boost_tree(tree_depth = tune(), learn_rate = tune()) %>%
+  set_engine("xgboost") %>%
+  set_mode("classification")
 
+# Create a workflow for XGBoost
+xgb_wf <- workflow() %>%
+  add_recipe(logit_recipe) %>%
+  add_model(xgb_model)
+
+# Train and tune XGBoost
+set.seed(203)
+xgb_res <- xgb_wf %>%
+  tune_grid(resamples = folds, grid = 10)
+
+# Select the best XGBoost model
+best_xgb <- xgb_res %>%
+  select_best(metric = "roc_auc")
+
+# Finalize the XGBoost model
+final_xgb_model <- xgb_wf %>%
+  finalize_workflow(best_xgb) %>%
+  fit(train_data)
+```
+
+```{r}
+
+# Load the stacks package
+library(stacks)
+
+# Define control settings for stacking
+ctrl <- control_stack()
+
+# Train and tune logistic regression with control settings
+logistic_res <- logistic_wf %>%
+  tune_grid(resamples = folds, grid = 10, control = ctrl)
+
+# Train and tune XGBoost with control settings
+xgb_res <- xgb_wf %>%
+  tune_grid(resamples = folds, grid = 10, control = ctrl)
+```
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+library(yardstick)
+library(vip)
+library(doParallel)
+library(stacks)  # For model stacking
+library(kknn)
+
+control <- control_grid(save_pred = TRUE, save_workflow = TRUE)
+
+logistic_res <- final_logistic_model %>% tune_grid(resamples = folds, grid = 10, control = control)
+knn_res <- final_knn_model %>% tune_grid(resamples = folds, grid = 10, control = control)
+xgb_res <- final_xgb_model %>% tune_grid(resamples = folds, grid = 10, control = control)
+
+# Create stacks ensemble model
+stack_model <- stacks() %>%
+  add_candidates(logistic_res) %>%
+  add_candidates(knn_res) %>%
+  add_candidates(xgb_res) %>%
+  blend_predictions() %>%
+  fit_members()
+
+
+# Predict ICU stay length
+predictions <- predict(stack_model, new_data = test_data, type = "prob")
+
+# Convert predictions to binary outcome (longer than 2 days or not)
+predictions <- predictions %>%
+  mutate(icu_stay_long = ifelse(.pred_1 > 0.5, "Yes", "No"))
+```
+
+4. Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
+
+## try1 
+```{r}
+library(pROC)
+# Predict ICU stay length
+logistic_preds <- predict(final_logistic_model, new_data = test_data, 
+                          type = "prob")
+knn_preds <- predict(final_knn_model, new_data = test_data, type = "prob")
+xgb_preds <- predict(final_xgb_model, new_data = test_data, type = "prob")
+stack_preds <- predict(stack_model, new_data = test_data, type = "prob")
+
+# Evaluate Model Performance
+eval_metrics <- function(preds, truth) {
+  preds <- preds %>%
+          mutate(icu_stay_pred = ifelse(.pred_1 >= 0.5, 1, 0))
+  roc_obj <- roc(truth, preds$.pred_1)
+  auc_value <- auc(roc_obj)
+  list(roc_auc = round(auc_value, 4), accuracy = mean(preds$icu_stay_pred==truth))
+}
+
+logistic_perf <- eval_metrics(logistic_preds, test_data$los_long)
+knn_perf <- eval_metrics(knn_preds, test_data$los_long)
+xgb_perf <- eval_metrics(xgb_preds, test_data$los_long)
+stack_perf <- eval_metrics(stack_preds, test_data$los_long)
+
+
+# Results Interpretation
+cat("Logistic Regression: AUC =", logistic_perf$roc_auc, "Accuracy =", logistic_perf$accuracy, "\n")
+cat("KNN: AUC =", knn_perf$roc_auc, "Accuracy =", knn_perf$accuracy, "\n")
+cat("XGBoost: AUC =", xgb_perf$roc_auc, "Accuracy =", xgb_perf$accuracy, "\n")
+cat("Stacked Model: AUC =", stack_perf$roc_auc, "Accuracy =", stack_perf$accuracy, "\n")
+```
